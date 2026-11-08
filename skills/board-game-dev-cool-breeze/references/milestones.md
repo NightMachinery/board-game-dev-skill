@@ -54,7 +54,7 @@ left running, and the docs describe what was built.
 11. **M11: the review loop.** Rounds of scripted probes, a player reviewer playing real games at
     phone and desktop size, and a screens reviewer reading the screenshot matrix. Each fix is its
     own slice with before and after shots. Acceptance: a round finds only small issues and no open
-    critical or high finding; accessibility and performance budgets pass. This is version 1.
+    blocker or major finding (severity scale in [orchestration.md](orchestration.md)); accessibility and performance budgets pass. This is version 1.
 
 ## Later games on the same platform
 

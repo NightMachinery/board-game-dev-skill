@@ -12,8 +12,31 @@ Long jobs run detached and notify the agent that launched them, or its parent if
 closed.
 
 **Owner phrases** steer a long run: "switch to nightshift HH:MM-HH:MM", "switch to continuous",
-"pause", "resume" and "status". Each is recorded verbatim, then acted on: set the guard's mode and
-arm the start, last-call and wind-down jobs for the window, plus an hourly recovery ping.
+"pause", "resume" and "status". Each is recorded verbatim, then acted on: set the guard's mode
+(`heavy.py mode nightshift --window HH:MM-HH:MM`, `mode continuous`, `mode paused`) and, for a
+window, arm four scheduled prompts to the coordinator with whatever scheduler the agent host
+offers (cron jobs, heartbeats, or system cron calling the host's CLI), on off-minutes:
+
+- **start**, three minutes after the window opens: read the state, verify live work, resume the
+  first unfinished task, launch the next slices;
+- **last call**, 48 minutes before it closes: launch nothing new that cannot finish in time; tell
+  workers to reach a checkpoint;
+- **wind-down**, 16 minutes before it closes: workers write results and stop, the coordinator
+  integrates what is green, writes the state and confirms no heavy job or browser is left;
+- **recovery ping**, hourly at an off-minute, always armed: compare live agents and jobs with the
+  state and act on any difference (a dead worker, a lost notification), without relaunching
+  running work.
+
+**Integration lock.** Only one writer changes the mainline at a time. The simplest form: the
+coordinator is the only integrator. If several agents integrate, they take a lock first
+(`mkdir <run dir>/locks/integration` succeeds for exactly one; write the holder and the time into
+it), and release it (`rm -r`) only after the commit landed and `git status` is clean. A failed
+commit keeps the lock until the checkout is clean again, so nobody inherits a dirty mainline.
+
+**Severity.** Reviews use one scale: **blocker** (P0: wrong rules, a leak, data loss, a crash,
+a broken core flow), **major** (P1: a real player-facing problem or a missing acceptance item),
+**minor** (P2: noticeable but does not affect play), **nit** (P3: polish). A slice merges with no
+open blocker or major; a milestone's review loop ends when a round finds no blocker or major.
 
 **A brief** names: the objective; the base commit; owned paths (the only files the worker may
 change); read paths; settled decisions; the exact checks to run; an observable stop condition; the

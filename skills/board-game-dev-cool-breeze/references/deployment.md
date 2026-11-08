@@ -6,7 +6,13 @@ shared host, add a `ship` step: build once on the development machine from a fix
 one artifact to each host in turn, check it, and keep a rollback. The template leaves `ship` out
 because it needs private target details, which belong in gitignored config.
 
-A redeploy, in order: build once from a fixed commit; run a read-only compatibility scan of stored
+The template gives basic self-hosting: build first, then stop, swap and start, with the old server
+untouched if the build fails. A **safe production release**, once real players have stored games, is
+extension work you add on top: the scans, backup and rollback below. Add it before production holds
+games anyone cares about, and redeploy production only when the owner has granted deployment
+authority.
+
+A safe production redeploy, in order: build once from a fixed commit; run a read-only compatibility scan of stored
 rooms against the candidate; stop the writer; scan again; back up room data; swap the binary and
 static build; start; check `/health` reports the expected build; run the production smoke suite
 from a stated vantage point. On failure, restart the old binary with its old configuration.

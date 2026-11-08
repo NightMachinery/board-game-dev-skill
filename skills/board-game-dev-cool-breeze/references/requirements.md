@@ -75,7 +75,8 @@ labels are translatable text. The project's own tooltip helper is used, never th
 - a fine pointer shows it on hover after a short delay and on keyboard focus; Escape closes it;
 - on touch, a tap shows it on an element with no action; an actionable element keeps its tap action
   and shows the tooltip on a long-press, and releasing the long-press never triggers the action;
-- any tap closes an open tooltip and is swallowed, so it never acts on what lies beneath;
+- any tap closes an open tooltip and is swallowed, so it never acts on what lies beneath (the
+  only exceptions are controls inside the bubble itself, below);
 - one tooltip at a time, the innermost one under the pointer or finger.
 
 - **Stacked tooltips.** A tooltip can carry a stack: a second panel joined to the bubble that
@@ -148,6 +149,8 @@ inheritance, never as an automatic light and dark pair. See [themes.md](themes.m
 
 ## When starting from someone else's code
 
-- Point URLs at the new repository, remove the previous creators' names, donation links and any
-  political or religious messaging that came with the code.
+- Point URLs at the new repository, and remove the previous creators' names from the product's UI
+  and branding, donation links and any political or religious messaging that came with the code.
+  Keep the licence files, copyright notices and attributions the licence requires (see
+  [legal-ip.md](legal-ip.md)); removing a name from the UI never means removing a required notice.
 - If a submodule needs changes, vendor it into the main repository instead of forking it.

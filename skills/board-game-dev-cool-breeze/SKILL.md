@@ -66,21 +66,32 @@ Do these with the owner before any code. Explain each choice with its tradeoffs 
    nightly window such as 00:00-10:00, or paused), which agent providers and accounts may be used,
    and whether the agent may deploy on its own judgement.
 
-Record every owner message verbatim in the run directory before acting on it, and keep the
-settled answers in the repository's decisions file.
+Create the run directory before the first question, and record every owner message verbatim in
+its `USER-VERBATIM.md` before acting on it. Settled answers go into the repository's decisions file,
+`docs/dev/decisions.md` (numbered entries; a later one names what it supersedes). Rulings on
+ambiguous game rules have their own file, `docs/rules/decisions.md`.
 
 ## Phase 1: bootstrap
 
-1. Create the repository and the private run directory. Gitignore the task checklist and local
-   state from the first commit ([references/project-setup.md](references/project-setup.md)).
-2. Copy the templates and fill their per-project config (`templates/tools/project.json`): project
-   name, run directory, ports, themes, art kinds, hosting.
-3. Write `AGENTS.md` from `templates/AGENTS.md.template`: the architecture paragraph, where things
+The templates are tools, not a game scaffold: the Go module, the SvelteKit app, the root package
+and lockfile, CI and the end-to-end suite are yours to create. `templates/README.md` lists the
+adoption order. In short:
+
+1. Create the repository and the run directory (`USER-VERBATIM.md`, `STATE.md`, `NOTES.md`,
+   `STORAGE.md`, `briefs/`, `results/`, `logs/`). Gitignore the task checklist and local state from
+   the first commit ([references/project-setup.md](references/project-setup.md)).
+2. Copy the templates and fill `tools/project.json`: project name, run directory, ports, theme,
+   art kinds, hosting. Copy the chosen theme and every theme it inherits from into `themes/`.
+3. Create the Go module and the SvelteKit app, the root package with its lockfile, and CI, so
+   `make verify-quick` (the **acceptance gate** every slice must pass) runs green on an empty game.
+4. Write `AGENTS.md` from `templates/AGENTS.md.template`: the architecture paragraph, where things
    live, the guard, browsers, processes, engine purity, client rules, assets, documentation,
-   privacy, commits and owner phrases. Every worker reads it first.
-4. Pin the toolchains (Go, Node, pnpm) in one place each and use them locally, in CI and in
-   deployment.
-5. Milestone 0 is a **vertical skeleton**: the server with `/health`, the client shell, one room
+   privacy, commits, owner phrases, and the **single-writer list** (lockfiles, the Makefile,
+   generated code, the protocol document and the frozen core types such as the engine's state,
+   action and event types, by path). Every worker reads it first.
+5. Pin each toolchain (Go, Node, pnpm) once, and make every other place that needs the version
+   (CI, the deploy script) read it or be checked against it.
+6. Milestone 0 is a **vertical skeleton**: the server with `/health`, the client shell, one room
    over WebSocket, a browser smoke test, CI, and `self_host.py setup` serving it at the real URL.
    Toolchain and deployment problems surface here, before game logic buries them.
 
@@ -107,8 +118,10 @@ roles.
 
 ## Phases 2 to 6: the build
 
-Run these as milestones. [references/milestones.md](references/milestones.md) has the sequence,
-each milestone's acceptance and the slices that usually belong to it.
+Run these as milestones. [references/milestones.md](references/milestones.md) has the execution
+order (bots come before the server there, because the simulator needs only the engine), each
+milestone's acceptance and the slices that usually belong to it. The list below is grouped by
+theme, not by order.
 
 - **Rules capture** ([references/rules-capture.md](references/rules-capture.md)): a complete rules
   reference in your own words, independent data tables reconciled field by field, and a rulings
@@ -161,7 +174,8 @@ The rules that cost the most to learn:
 - **Heavy commands go through the guard**, one at a time per worker. It enforces the memory budget,
   the run mode (continuous, a nightly window, or paused) and a single headless browser.
 - **Never poll with model turns.** Launch long jobs detached with a completion notification and end
-  the turn. Arm the notification at launch.
+  the turn. Arm the notification at launch. Without an agent host that delivers messages, use the
+  harness's own tracked background task, or a small watcher script whose exit is the event.
 - **Keep state durable**: owner words verbatim, current state newest first, curated learnings, the
   task checklist, the artifact ledger and one result file per assignment. Checkpoint before quota
   exhaustion, compaction or handoff.
