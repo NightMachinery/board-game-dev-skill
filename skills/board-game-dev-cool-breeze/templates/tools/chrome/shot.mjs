@@ -2,11 +2,11 @@
 // Screenshot and DOM probe for one page of the running app, over CDP.
 //
 //   python3 tools/heavy.py run --kind browser -- node tools/chrome/shot.mjs \
-//     --url /play/ABCD --token my-gameShotTokenA00000A --name Ana --vp 390x844@3 \
+//     --origin http://localhost --url /play/ABCD --token my-gameShotTokenA00000A --name Ana --vp 390x844@3 \
 //     --probe --out x.png
 //
 // Flags (`--flag value` or `--flag=value`):
-//   --origin URL     app origin (default $BGD_ORIGIN or http://127.0.0.1:41731)
+//   --origin URL     app origin (default $BGD_ORIGIN or .self-host/config.json URL)
 //   --url PATH       page to open, relative to --origin (default /); a full URL also works
 //   --token T        written to localStorage my-game:token before the page loads; it
 //                    must be 22 base64url characters ending in A, Q, g or w, or
@@ -60,7 +60,8 @@ import { CDP, evaluate, openPage, sleep } from './cdp.mjs';
 import { isMain, launch, printHeader, reportAndExit } from './launch.mjs';
 
 const PRESETS = { mobile: '390x844@2', desktop: '1280x800@1' };
-import { project, storagePrefix } from '../config.mjs';
+import { storagePrefix } from '../config.mjs';
+import { frontendOrigin } from './origin.mjs';
 
 /** The token shape the client keeps (identity.ts isValidToken). */
 export const TOKEN_RE = /^[A-Za-z0-9_-]{21}[AQgw]$/;
@@ -167,7 +168,7 @@ async function locate(selector, pad) {
 async function main() {
   const { values: o } = parseArgs({
     options: {
-      origin: { type: 'string', default: process.env.BGD_ORIGIN ?? `http://127.0.0.1:${project.ports.server}` },
+      origin: { type: 'string' },
       url: { type: 'string', default: '/' },
       token: { type: 'string' },
       name: { type: 'string' },
@@ -210,7 +211,8 @@ async function main() {
     throw new Error(`--vision: one of ${VISIONS.join(', ')}, got ${o.vision}`);
   const vp = parseViewport(o.vp);
   const extraStorage = parseStorage(o.storage);
-  const target = new URL(o.url, o.origin);
+  const origin = o.origin ?? (/^https?:\/\//.test(o.url) ? o.url : frontendOrigin());
+  const target = new URL(o.url, origin);
 
   const chrome = await launch({ force: o.force });
   let browser = null;

@@ -2,7 +2,7 @@
 // Launches our own headless Chromium for the CDP tools, or attaches to one
 // that is already running. Never touches the owner's everyday browser: the
 // binary is Playwright's Chromium (Chrome for Testing, its own app with its
-// own bundle id), not the installed Google Chrome (D26).
+// own bundle id), not the installed everyday Google Chrome app.
 //
 // Library:
 //   import { launch } from './launch.mjs';
@@ -44,8 +44,8 @@ import { getJSON, sleep } from './cdp.mjs';
 
 import { project } from '../config.mjs';
 export const DEFAULT_PORT = project.ports.chrome;
-// The e2e package's Playwright knows where its Chromium is installed.
-const E2E_PACKAGE = fileURLToPath(new URL('../../package.json', import.meta.url));
+// Resolve Playwright from the adopted project's root dependencies.
+const PROJECT_PACKAGE = fileURLToPath(new URL('../../package.json', import.meta.url));
 
 /** Thrown when a launch is refused because the guard's browser lock is not held. */
 export class LaunchRefused extends Error {}
@@ -58,7 +58,7 @@ export const REFUSAL = [
   'To use a Chrome that is already running instead, set CHROME_CDP=http://127.0.0.1:<port>.'
 ].join('\n');
 
-/** The command line flags (infra plan, section 4). */
+/** Headless, loopback-only debugging with background services disabled. */
 export function chromeFlags({ port, profileDir }) {
   return [
     '--headless=new',
@@ -99,9 +99,9 @@ export function findChrome() {
   }
   let bin = null;
   try {
-    bin = createRequire(E2E_PACKAGE)('playwright').chromium.executablePath();
+    bin = createRequire(PROJECT_PACKAGE)('playwright').chromium.executablePath();
   } catch {
-    // No e2e dependencies installed yet: fall through to the hint below.
+    // Project dependencies are not installed yet: show the hint below.
   }
   if (bin && isExecutable(bin)) return bin;
   throw new Error(

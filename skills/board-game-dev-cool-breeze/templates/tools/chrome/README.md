@@ -7,7 +7,7 @@ Copy this directory plus `tools/config.mjs`, `tools/project.json` and `heavy.py`
 Run all browser work inside the guard:
 
 ```sh
-python3 tools/heavy.py run --kind browser -- node tools/chrome/shot.mjs --url / --vp 390x844@2 --probe --out /tmp/page.png
+python3 tools/heavy.py run --kind browser -- node tools/chrome/shot.mjs --origin "$BGD_ORIGIN" --url / --vp 390x844@2 --probe --out /tmp/page.png
 python3 tools/heavy.py run --kind browser -- node tools/chrome/svg-render.mjs --in art/vector --sizes 16,24,48,128 --out /tmp/icons.png
 ```
 
@@ -16,3 +16,10 @@ python3 tools/heavy.py run --kind browser -- node tools/chrome/svg-render.mjs --
 Use `cdp.mjs` and `probePage` to write game-specific walkthroughs separately. No game policy or tutorial walker ships here. One game uses one colour theme; colour-scheme emulation is a browser diagnostic only.
 
 Standalone tests (no browser or npm packages needed): `node --test tools/chrome/*.test.mjs`.
+
+Use the frontend URL printed by `self_host.py` as `--origin` or `BGD_ORIGIN`.
+Without an explicit origin the tool reads `.self-host/config.json`'s remembered
+URL. It never assumes the Go backend serves pages. Hosting may scan away from
+configured component ports; the actual ports persist in that same state file.
+For a separate controlled test frontend, always pass its actual origin. The
+probe reports the page URL it inspected.

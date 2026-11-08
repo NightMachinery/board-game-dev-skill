@@ -11,13 +11,14 @@ and `art.kinds` with generation size and shipped sizes (`name,w,h,budget` bytes)
 private and shares the guard's state directory.
 
 Each `themes/<id>/theme.json` contains `id`, `name`, `mode` (required `light`
-or `dark`), `inherits` (ordered parent ids), `tokens` (nested colours/fonts/radii)
+or `dark`), `inherits` (ordered parent ids), `tokens` (semantic CSS token keys)
 and `artDirection` (relative style file path inside that theme). Copy `art/style.md`
 there and adapt it. A theme contains style, not game content. Game-wide
 `art/subjects.json` maps `kind/slug` to `{ "subject": "...", "accent": "..." }`.
 Optional `themes/<id>/subjects.json` overrides selected subjects. Child values
 win; first parents win over later parents, recursively, then the game map.
-Cycles and unknown parents fail. Token groups inherit the same way.
+Cycles and unknown parents fail. Copy every parent theme directory along with a
+child. Token groups inherit the same way.
 
 Use these steps for each theme (replace `THEME` and `card/sample`):
 
@@ -59,3 +60,18 @@ git; approved lossless originals belong in git.
 Tests: `node --test tools/art/*.test.mjs`; add `ART_INTEGRATION=1` to exercise
 the installed native codecs with a tiny generated sentinel image. Wrap native
 processing and contact-sheet batches in the resource guard.
+
+The client accepts string/number token values. Prefer flat semantic keys such
+as `table`, `panel`, `fg`, `accent`, `on-accent`, `rule`, `type-ui` and
+`type-display`: they become CSS `--table`, `--panel`, `--fg`, `--accent`,
+`--on-accent`, `--rule`, `--type-ui` and `--type-display`. Nested groups also
+work and flatten with hyphens: `{ "colours": { "ink": "#222" } }` becomes
+`--colours-ink`, not `--ink`. The templates supply no Tailwind binding or full
+required token set: bind the game's semantic utilities to its chosen names.
+Tooltip components read `--tooltip-bg`, `--tooltip-fg`, `--tooltip-rule`; rules
+components read `--rules-bg`, `--rules-fg`, `--rules-rule`. Alias those to
+`--panel`, `--fg`, `--rule` in the app's CSS if using the supplied theme keys.
+
+Rejected reviews' `promptAmend` is automatically reused by the next generation;
+`--amend` explicitly replaces it for that attempt, including an empty string
+to clear it.

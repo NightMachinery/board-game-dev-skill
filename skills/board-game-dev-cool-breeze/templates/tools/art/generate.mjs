@@ -23,7 +23,8 @@ await main(async (args) => {
   const kind = args.id.split('/')[0];
   const template = new RegExp(`\\*\\*${kind}\\*\\*:\\s*"([^"]+)"`).exec(style)?.[1];
   if (!prefix || !template) throw new Error('style needs a quoted prefix and a kind template');
-  const prompt = `${prefix} ${template.replaceAll('{subject}', a.subject).replaceAll('{accent}', a.accent ?? '')} ${args.amend ?? ''}`;
+  const amendment = args.amend ?? a.promptAmend ?? '';
+  const prompt = `${prefix} ${template.replaceAll('{subject}', a.subject).replaceAll('{accent}', a.accent ?? '')} ${amendment}`;
   const instruction = `Call image_gen exactly once: ${prompt}. Size ${a.spec.gen}. Do nothing else. Reply DONE.`;
   if (args['dry-run']) { console.log(instruction); return; }
   const bin = process.env.CODEX_BIN;
@@ -43,7 +44,7 @@ await main(async (args) => {
   const attempt = a.attempt + 1, dest = path.join(paths(args.theme).raw, args.id, `${attempt}.png`);
   await fs.mkdir(path.dirname(dest), { recursive: true });
   await fs.copyFile(src, dest, fs.constants.COPYFILE_EXCL);
-  Object.assign(a, { attempt, status: 'generated', promptAmend: args.amend ?? '' });
+  Object.assign(a, { attempt, status: 'generated', promptAmend: amendment });
   delete a.outputs; delete a.approvedAttempt;
   await writeJSON(paths(args.theme).manifest, m);
   console.log(dest);

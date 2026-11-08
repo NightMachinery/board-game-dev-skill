@@ -75,3 +75,16 @@ test('native lossless processing and approval gate', { skip: !process.env.ART_IN
   assert.equal((await buildIndex('codec')).assets['card/sample'].sourceTheme, 'codec');
   call('gate.mjs');
 });
+
+test('generation reuses review amendments unless the command overrides them', async () => {
+  await theme('amended');
+  await writeJSON(paths('amended').manifest, { theme: 'amended', assets: { 'card/sample': {
+    subject: 'one tree', spec: { gen: '1536x1024' }, status: 'rejected', promptAmend: 'recorded correction'
+  } } });
+  const call = (...args) => execFileSync(process.execPath, [new URL('generate.mjs', import.meta.url).pathname,
+    '--theme', 'amended', '--id', 'card/sample', '--dry-run', ...args], { env: process.env, encoding: 'utf8' });
+  assert.match(call(), /recorded correction/);
+  const overridden = call('--amend', 'new correction');
+  assert.match(overridden, /new correction/); assert.doesNotMatch(overridden, /recorded correction/);
+  assert.doesNotMatch(call('--amend', ''), /recorded correction/);
+});

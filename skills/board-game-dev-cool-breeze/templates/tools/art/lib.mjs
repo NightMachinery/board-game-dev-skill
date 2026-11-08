@@ -85,7 +85,7 @@ export function cliArgs() {
     const k = process.argv[i].replace(/^--/, '');
     if (!allowed.has(k) || !process.argv[i].startsWith('--')) throw new Error(`unknown argument: ${process.argv[i]}`);
     if (['check', 'dry-run', 'help'].includes(k)) args[k] = true;
-    else { if (!process.argv[i + 1] || process.argv[i + 1].startsWith('--')) throw new Error(`missing --${k} value`); args[k] = process.argv[++i]; }
+    else { if (process.argv[i + 1] === undefined || process.argv[i + 1].startsWith('--')) throw new Error(`missing --${k} value`); args[k] = process.argv[++i]; }
   }
   return args;
 }
