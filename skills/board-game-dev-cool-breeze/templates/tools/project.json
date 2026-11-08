@@ -28,5 +28,39 @@
     "preview": 41733,
     "e2e": 41734,
     "chrome": 41739
+  },
+  "themes_dir": "themes",
+  "default_theme": "my-theme",
+  "art": {
+    "kinds": {
+      "card": {
+        "gen": "1536x1024",
+        "sizes": [
+          {
+            "name": "main",
+            "w": 480,
+            "h": 360,
+            "budget": 35840
+          },
+          {
+            "name": "thumb",
+            "w": 240,
+            "h": 180,
+            "budget": 10240
+          }
+        ]
+      },
+      "token": {
+        "gen": "1024x1024",
+        "sizes": [
+          {
+            "name": "main",
+            "w": 192,
+            "h": 192,
+            "budget": 12288
+          }
+        ]
+      }
+    }
   }
 }
