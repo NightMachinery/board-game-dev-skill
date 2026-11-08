@@ -161,6 +161,18 @@ KIND_LOCKS = tuple(CONFIG["kind_locks"])
 NICE_KINDS = tuple(CONFIG["nice_kinds"])
 if "light" not in KINDS or not set(KIND_LOCKS + NICE_KINDS) <= set(KINDS):
     raise ValueError("project.json: kinds must include light and all lock/nice kinds")
+ENV_PREFIX = CONFIG.get("env_prefix", "BGD_")
+if not re.fullmatch(r"[A-Z][A-Z0-9_]*_", ENV_PREFIX):
+    raise ValueError("project.json: env_prefix must be an uppercase prefix ending in _")
+
+
+def env_name(suffix):
+    """The configured namespace, retaining the project's existing shell contract."""
+    return CONFIG["run_dir_env"] if suffix == "RUN_DIR" else ENV_PREFIX + suffix
+
+
+__doc__ = __doc__.replace("BGD_", ENV_PREFIX).replace("~/.local/state/board-game-dev", CONFIG["run_dir"])
+
 MODES = ("continuous", "nightshift", "paused")
 
 DEFAULT_WINDOW = "00:00-10:00"
@@ -193,8 +205,8 @@ SLOT_RE = re.compile(r"^slot-(\d+)$")
 FORWARDED_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 
 # Detached runs that notify a Paseo agent (see the module docstring).
-NOTIFY_ENV = ("HEAVY_NOTIFY", "BGD_HEAVY_NOTIFY_AGENT", "BGD_HEAVY_NOTIFY_FD",
-              "BGD_HEAVY_NOTIFY_ACK_FD", "BGD_HEAVY_NOTIFY_LOG")
+NOTIFY_ENV = ("HEAVY_NOTIFY", env_name("HEAVY_NOTIFY_AGENT"), env_name("HEAVY_NOTIFY_FD"),
+              env_name("HEAVY_NOTIFY_ACK_FD"), env_name("HEAVY_NOTIFY_LOG"))
 NOTIFY_OFF = ("", "0", "off", "no", "false")
 AGENT_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
@@ -805,8 +817,10 @@ class Guard:
         self.err = stderr or sys.stderr
 
         self.home = self.env.get("HOME") or os.path.expanduser("~")
-        self.configured_run_dir = self.env.get(CONFIG["run_dir_env"]) or os.path.expandvars(
-            str(CONFIG["run_dir"]).replace("~", self.home, 1))
+        default_run_dir = str(CONFIG["run_dir"])
+        if default_run_dir == "~" or default_run_dir.startswith("~/"):
+            default_run_dir = self.home + default_run_dir[1:]
+        self.configured_run_dir = self.env.get(CONFIG["run_dir_env"]) or os.path.expandvars(default_run_dir)
         ci = self.env.get("CI", "").lower() in ("true", "1")
         self.ci_mode = ci and not os.path.isdir(self.configured_run_dir)
         if self.ci_mode:
@@ -840,8 +854,8 @@ class Guard:
         # The getters used by eligibility/status must never write to a pipe.
         self._max_slots = self._read_max_slots()
         self._browser_floors = (
-            self._env_float("BGD_MIN_FREE_PCT_BROWSER", DEFAULT_MIN_FREE_PCT_BROWSER),
-            self._env_float("BGD_MIN_SWAP_FREE_MB_BROWSER", DEFAULT_MIN_SWAP_FREE_MB_BROWSER))
+            self._env_float(env_name("MIN_FREE_PCT_BROWSER"), DEFAULT_MIN_FREE_PCT_BROWSER),
+            self._env_float(env_name("MIN_SWAP_FREE_MB_BROWSER"), DEFAULT_MIN_SWAP_FREE_MB_BROWSER))
 
     # -- configuration -------------------------------------------------------
 
@@ -883,13 +897,13 @@ class Guard:
             return default
 
     def _read_max_slots(self) -> Optional[int]:
-        raw = self.env.get("BGD_MAX_SLOTS")
+        raw = self.env.get(env_name("MAX_SLOTS"))
         if raw is None or raw == "":
             return None
         try:
             return max(int(raw), 0)
         except ValueError:
-            self._warn(f"heavy: ignoring BGD_MAX_SLOTS={raw!r}: not an integer")
+            self._warn(f"heavy: ignoring {env_name('MAX_SLOTS')}={raw!r}: not an integer")
             return None
 
     def max_slots(self) -> Optional[int]:
@@ -1299,15 +1313,15 @@ class Guard:
         goflags = env["GOFLAGS"].split()
         if not any(flag in ("-p", "--p") or flag.startswith(("-p=", "--p=")) for flag in goflags):
             env["GOFLAGS"] = f"{env['GOFLAGS']} -p=2"
-        env["BGD_HEAVY_KIND"] = kind
+        env[env_name("HEAVY_KIND")] = kind
         if slot_held:
-            env["BGD_HEAVY_HELD"] = "1"
+            env[env_name("HEAVY_HELD")] = "1"
         else:
-            env.pop("BGD_HEAVY_HELD", None)
+            env.pop(env_name("HEAVY_HELD"), None)
         if locks:
-            env["BGD_HEAVY_LOCKS"] = ",".join(sorted(locks))
+            env[env_name("HEAVY_LOCKS")] = ",".join(sorted(locks))
         else:
-            env.pop("BGD_HEAVY_LOCKS", None)
+            env.pop(env_name("HEAVY_LOCKS"), None)
         for key in NOTIFY_ENV:  # inner runs must block, not detach again
             env.pop(key, None)
         return env
@@ -1322,14 +1336,14 @@ class Guard:
             self._warn("heavy: run needs a command after --")
             return EX_USAGE
         if wait is None:
-            wait = self._env_float("BGD_HEAVY_WAIT", DEFAULT_WAIT)
+            wait = self._env_float(env_name("HEAVY_WAIT"), DEFAULT_WAIT)
         priority = priority or self.env.get("HEAVY_PRIORITY") or "normal"
         if priority not in PRIORITIES:
             self._warn(f"heavy: invalid priority {priority!r}; use normal or high")
             return EX_USAGE
         self._memory_sample = None
-        nested = self.env.get("BGD_HEAVY_HELD") == "1"
-        inherited = {x for x in self.env.get("BGD_HEAVY_LOCKS", "").split(",") if x}
+        nested = self.env.get(env_name("HEAVY_HELD")) == "1"
+        inherited = {x for x in self.env.get(env_name("HEAVY_LOCKS"), "").split(",") if x}
         self.last_refusal, self.started_at = None, None
         if not nested:
             try:
@@ -1479,8 +1493,8 @@ class Guard:
         read_fd, write_fd = os.pipe()
         ack_read, ack_write = os.pipe()
         env = {k: v for k, v in self.env.items() if k not in NOTIFY_ENV}
-        env.update(BGD_HEAVY_NOTIFY_AGENT=agent, BGD_HEAVY_NOTIFY_FD=str(write_fd),
-                   BGD_HEAVY_NOTIFY_ACK_FD=str(ack_read), BGD_HEAVY_NOTIFY_LOG=log_path)
+        env.update({env_name("HEAVY_NOTIFY_AGENT"): agent, env_name("HEAVY_NOTIFY_FD"): str(write_fd),
+                    env_name("HEAVY_NOTIFY_ACK_FD"): str(ack_read), env_name("HEAVY_NOTIFY_LOG"): log_path})
         argv = [sys.executable, os.path.abspath(__file__), "run", "--kind", kind,
                 "--wait", repr(float(wait)), "--priority", priority, "--"] + cmd
         try:
@@ -1538,12 +1552,12 @@ class Guard:
     def run_notified(self, kind: str, cmd: Sequence[str], wait: Optional[float],
                      priority: Optional[str]) -> int:
         """The detached copy: run the job, then message the agent once."""
-        agent = self.env["BGD_HEAVY_NOTIFY_AGENT"]
-        log_path = self.env.get("BGD_HEAVY_NOTIFY_LOG", "")
+        agent = self.env[env_name("HEAVY_NOTIFY_AGENT")]
+        log_path = self.env.get(env_name("HEAVY_NOTIFY_LOG"), "")
         fds: Dict[str, Optional[int]] = {}
         for name in ("FD", "ACK_FD"):
             try:
-                fds[name] = int(self.env.get(f"BGD_HEAVY_NOTIFY_{name}", ""))
+                fds[name] = int(self.env.get(env_name(f"HEAVY_NOTIFY_{name}"), ""))
             except ValueError:
                 fds[name] = None
 
@@ -1779,7 +1793,7 @@ class Guard:
         if state.in_window(now):
             why += ", nightshift window"
         if self.max_slots() is not None:
-            why += f", BGD_MAX_SLOTS={self.max_slots()}"
+            why += f", {env_name('MAX_SLOTS')}={self.max_slots()}"
         resource_lines = []
         with self._admission():
             slots = self.locks.slot_names()
@@ -2141,7 +2155,7 @@ def build_parser() -> argparse.ArgumentParser:
                          description="Run CMD under the guard. Put -- before the command.")
     run.add_argument("--kind", required=True, choices=KINDS)
     run.add_argument("--wait", type=float, default=None, metavar="SECONDS",
-                     help="how long to wait for a slot or lock (default 1800 or $BGD_HEAVY_WAIT)")
+                     help=f"how long to wait for a slot or lock (default 1800 or ${env_name('HEAVY_WAIT')})")
 
     run.add_argument("--priority", choices=PRIORITIES, default=None,
                      help="queue priority (default normal or $HEAVY_PRIORITY); only the coordinator grants high")
@@ -2176,7 +2190,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.command == "run":
         if cmd is None:
             parser.error("run needs -- before the command, e.g. heavy.py run --kind test -- go test ./...")
-        if guard.env.get("BGD_HEAVY_NOTIFY_AGENT"):
+        if guard.env.get(env_name("HEAVY_NOTIFY_AGENT")):
             return guard.run_notified(args.kind, cmd, args.wait, args.priority)
         return guard.run(args.kind, cmd, args.wait, args.priority, args.notify)
     if args.command == "status":

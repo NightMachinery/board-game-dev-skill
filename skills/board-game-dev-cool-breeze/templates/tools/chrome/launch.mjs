@@ -42,10 +42,10 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { getJSON, sleep } from './cdp.mjs';
 
-import { project } from '../config.mjs';
+import { project, envName } from '../config.mjs';
 export const DEFAULT_PORT = project.ports.chrome;
 // Resolve Playwright from the adopted project's root dependencies.
-const PROJECT_PACKAGE = fileURLToPath(new URL('../../package.json', import.meta.url));
+const PROJECT_PACKAGE = fileURLToPath(new URL(`../../${project.chrome?.playwright_package ?? 'package.json'}`, import.meta.url));
 
 /** Thrown when a launch is refused because the guard's browser lock is not held. */
 export class LaunchRefused extends Error {}
@@ -99,7 +99,7 @@ export function findChrome() {
   }
   let bin = null;
   try {
-    bin = createRequire(PROJECT_PACKAGE)('playwright').chromium.executablePath();
+    bin = createRequire(PROJECT_PACKAGE)(project.chrome?.playwright_module ?? 'playwright').chromium.executablePath();
   } catch {
     // Project dependencies are not installed yet: show the hint below.
   }
@@ -199,7 +199,7 @@ export async function launch({ force = false, port, timeoutMs = 20_000 } = {}) {
     };
   }
 
-  if (process.env.BGD_HEAVY_KIND !== 'browser' && !force) throw new LaunchRefused(REFUSAL);
+  if (process.env[envName('HEAVY_KIND')] !== 'browser' && !force) throw new LaunchRefused(REFUSAL);
 
   const wantPort = port ?? Number(process.env.CHROME_PORT ?? DEFAULT_PORT);
   if (!Number.isInteger(wantPort) || wantPort < 0 || wantPort > 65535) {
@@ -214,7 +214,7 @@ export async function launch({ force = false, port, timeoutMs = 20_000 } = {}) {
   }
 
   const bin = findChrome();
-  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), `bgd-chrome-${process.pid}-`));
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), `${project.name}-chrome-${process.pid}-`));
   const child = spawn(bin, chromeFlags({ port: wantPort, profileDir }), {
     detached: true, // its own process group, so close() can kill helpers too
     stdio: ['ignore', 'ignore', 'pipe']
@@ -326,7 +326,7 @@ export function reportAndExit(err) {
     err instanceof Error &&
     ((typeof err.code === 'string' && err.code.startsWith('ERR_PARSE_ARGS_')) ||
       Object.getPrototypeOf(err) === Error.prototype);
-  const brief = refused || (expected && process.env.BGD_STACK !== '1');
+  const brief = refused || (expected && process.env[envName('STACK')] !== '1');
   console.error(brief ? err.message : `${err?.stack ?? err}`);
   process.exit(refused ? 2 : 1);
 }

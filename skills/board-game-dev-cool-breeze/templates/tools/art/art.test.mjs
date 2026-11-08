@@ -4,7 +4,7 @@ import test from 'node:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'bgd-art-test-'));
 process.env.BGD_ART_ROOT = scratch;
 process.env.BGD_RUN_DIR = path.join(scratch, 'private');
@@ -87,4 +87,23 @@ test('generation reuses review amendments unless the command overrides them', as
   const overridden = call('--amend', 'new correction');
   assert.match(overridden, /new correction/); assert.doesNotMatch(overridden, /recorded correction/);
   assert.doesNotMatch(call('--amend', ''), /recorded correction/);
+});
+
+// Inert sentinel proves a custom guard namespace does not re-enter heavy.py.
+// The approved asset refuses generation before any model binary can run.
+test('generation honors the configured inherited codex lane', async () => {
+  await theme('guard-prefix');
+  await writeJSON(paths('guard-prefix').manifest, { theme: 'guard-prefix', assets: {
+    'card/sample': { status: 'approved' }
+  } });
+  const settings = path.join(scratch, 'guard-config.json');
+  await writeJSON(settings, { ...project, env_prefix: 'EXISTING_' });
+  await fs.mkdir(path.join(scratch, 'tools'), { recursive: true });
+  await fs.writeFile(path.join(scratch, 'tools/heavy.py'), 'print("unexpected guard reexec")\nraise SystemExit(17)\n');
+  const result = spawnSync(process.execPath, [new URL('generate.mjs', import.meta.url).pathname,
+    '--theme', 'guard-prefix', '--id', 'card/sample'], { encoding: 'utf8', timeout: 5000,
+    env: { ...process.env, BGD_PROJECT_CONFIG: settings, EXISTING_HEAVY_KIND: 'codex', CODEX_BIN: '/no-model-call' } });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /approved art cannot be regenerated/);
+  assert.doesNotMatch(result.stdout, /unexpected guard reexec/);
 });

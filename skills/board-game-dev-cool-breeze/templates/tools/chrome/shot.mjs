@@ -11,6 +11,7 @@
 //   --token T        written to localStorage my-game:token before the page loads; it
 //                    must be 22 base64url characters ending in A, Q, g or w, or
 //                    the app replaces it (so the script refuses any other value)
+//   --theme T        a project.chrome.themes value, written to the theme storage key
 //   --name N         written to localStorage my-game:name
 //   --storage JSON   a JSON object of localStorage keys to write before the page
 //                    loads, such as '{"my-game:settings":{"animationSpeed":"off"}}': a
@@ -60,7 +61,7 @@ import { CDP, evaluate, openPage, sleep } from './cdp.mjs';
 import { isMain, launch, printHeader, reportAndExit } from './launch.mjs';
 
 const PRESETS = { mobile: '390x844@2', desktop: '1280x800@1' };
-import { storagePrefix } from '../config.mjs';
+import { storagePrefix, project } from '../config.mjs';
 import { frontendOrigin } from './origin.mjs';
 
 /** The token shape the client keeps (identity.ts isValidToken). */
@@ -172,6 +173,7 @@ async function main() {
       url: { type: 'string', default: '/' },
       token: { type: 'string' },
       name: { type: 'string' },
+      theme: { type: 'string' },
       storage: { type: 'string', multiple: true, default: [] },
       scheme: { type: 'string' },
       vp: { type: 'string', default: '390x844@2' },
@@ -204,6 +206,8 @@ async function main() {
     throw new Error(
       `--token: expected 22 base64url characters ending in A, Q, g or w (the client replaces anything else), got ${o.token}`
     );
+  if (o.theme && !project.chrome?.themes?.includes(o.theme))
+    throw new Error(`--theme: one of ${(project.chrome?.themes ?? []).join(', ')}`);
   if (o.scheme && !['light', 'dark'].includes(o.scheme)) throw new Error('--scheme: light or dark');
   if (!['reduce', 'no-preference'].includes(o.motion))
     throw new Error('--motion: reduce or no-preference');
@@ -275,6 +279,7 @@ async function main() {
     const storage = [...extraStorage];
     if (o.token !== undefined) storage.push([`${storagePrefix}token`, o.token]);
     if (o.name !== undefined) storage.push([`${storagePrefix}name`, o.name]);
+    if (o.theme !== undefined) storage.push([`${storagePrefix}theme`, o.theme]);
     // The keys are written by a new-document script, which runs on the
     // target origin before any of the page's own scripts (the theme
     // bootstrap in app.html included). So the app boots once, already

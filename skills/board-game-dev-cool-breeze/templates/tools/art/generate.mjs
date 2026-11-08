@@ -1,5 +1,6 @@
 // Generate exactly one bitmap through the real Codex binary. Never parallelize.
 import fs from 'node:fs/promises';
+import { envName } from '../config.mjs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -10,7 +11,7 @@ async function snapshot(dir) {
   catch (e) { if (e.code === 'ENOENT') return []; throw e; }
 }
 await main(async (args) => {
-  if (!args['dry-run'] && process.env.BGD_HEAVY_KIND !== 'codex') {
+  if (!args['dry-run'] && process.env[envName('HEAVY_KIND')] !== 'codex') {
     const child = spawnSync('python3', [path.join(root, 'tools/heavy.py'), 'run', '--kind', 'codex', '--wait', '3600', '--', process.execPath,
       fileURLToPath(import.meta.url), ...process.argv.slice(2)], { stdio: 'inherit', env: process.env });
     process.exitCode = child.status ?? 1; return;

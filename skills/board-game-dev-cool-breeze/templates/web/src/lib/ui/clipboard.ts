@@ -1,26 +1,49 @@
-// Call directly in a user gesture. A false result should show selectable text.
+/** Copy on HTTPS and plain HTTP, preserving the caller's focus and selection. */
 export async function copyText(text: string): Promise<boolean> {
-  if (globalThis.isSecureContext && typeof globalThis.navigator?.clipboard?.writeText === 'function') {
-    try { await navigator.clipboard.writeText(text); return true; } catch { /* fallback */ }
-  }
   if (typeof document === 'undefined') return false;
-  const before = document.activeElement;
+  if (globalThis.isSecureContext && typeof navigator !== 'undefined') {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      // Permissions or browser policy can reject the modern API. Try selection.
+    }
+  }
+  return copySelection(text);
+}
+
+function copySelection(text: string): boolean {
+  const active = document.activeElement;
+  const field =
+    active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement ? active : null;
+  const start = field?.selectionStart ?? null;
+  const end = field?.selectionEnd ?? null;
+  const direction = field?.selectionDirection ?? null;
   const selection = document.getSelection();
-  const ranges = selection ? Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i).cloneRange()) : [];
-  const field = document.createElement('textarea');
-  field.value = text;
-  field.readOnly = true;
-  field.style.cssText = 'position:fixed;inset:0;opacity:0;pointer-events:none';
-  document.body.append(field);
+  const ranges = selection
+    ? Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i).cloneRange())
+    : [];
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.readOnly = true;
+  textarea.style.cssText = 'position:fixed;inset:0;opacity:0;pointer-events:none;';
   try {
-    field.focus({ preventScroll: true });
-    field.select(); field.setSelectionRange(0, text.length);
+    (active?.closest('dialog[open]') ?? document.body).append(textarea);
+    textarea.select();
     return document.execCommand('copy');
-  } catch { return false; }
-  finally {
-    field.remove();
-    if (before instanceof HTMLElement && before.isConnected) before.focus({ preventScroll: true });
-    selection?.removeAllRanges();
-    for (const range of ranges) selection?.addRange(range);
+  } catch {
+    return false;
+  } finally {
+    textarea.remove();
+    if (active instanceof HTMLElement) active.focus({ preventScroll: true });
+    if (selection) {
+      selection.removeAllRanges();
+      for (const range of ranges) selection.addRange(range);
+    }
+    if (field && start !== null && end !== null) {
+      field.setSelectionRange(start, end, direction ?? undefined);
+    }
   }
 }

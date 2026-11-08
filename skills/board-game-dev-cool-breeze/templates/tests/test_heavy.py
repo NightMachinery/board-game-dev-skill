@@ -54,7 +54,7 @@ DEFAULTED = tuple(key for key, _ in heavy.DEFAULT_CHILD_ENV)
 def clean_environ():
     """os.environ without the guard's own variables, CI markers or the defaulted ones."""
     return {k: v for k, v in os.environ.items()
-            if not k.startswith("BGD_") and k not in (
+            if not k.startswith(heavy.ENV_PREFIX) and k not in (
                 "CI", "RUNNER_TEMP", "HEAVY_PRIORITY", "HEAVY_NOTIFY", "PASEO_AGENT_ID", "PASEO_BIN",
                 "MAKELEVEL", "MAKEFLAGS", "MFLAGS") + DEFAULTED}
 
@@ -116,7 +116,7 @@ class GuardCase(unittest.TestCase):
     def guard(self, level=1, free=50.0, swap_total=8192.0, swap_free=4096.0, env=None,
               platform="darwin", reader=None, **kw):
         base = clean_environ()
-        base["BGD_RUN_DIR"] = self.run_dir
+        base[heavy.env_name('RUN_DIR')] = self.run_dir
         base["HOME"] = self.tmp
         base.update(env or {})
         mem = heavy.Memory(level=level, free_pct=free, swap_total_mb=swap_total,
@@ -273,7 +273,7 @@ class CapacityTests(GuardCase):
     def test_max_slots_caps_but_never_raises(self):
         self.assertEqual(heavy.slot_capacity(1, True, max_slots=1), 1)
         self.assertEqual(heavy.slot_capacity(2, False, max_slots=5), 1)
-        g = self.guard(level=1, env={"BGD_MAX_SLOTS": "1"})
+        g = self.guard(level=1, env={heavy.env_name('MAX_SLOTS'): "1"})
         self.assertEqual(g.capacity(g.read_memory()), 1)
 
     def test_nightshift_window_adds_a_slot(self):
@@ -311,9 +311,9 @@ class BrowserThresholdTests(GuardCase):
         self.assertIn("free memory 10%", heavy.browser_block_reason(mem, 14, 512))
 
     def test_floors_are_env_tunable(self):
-        g = self.guard(env={"BGD_MIN_FREE_PCT_BROWSER": "30", "BGD_MIN_SWAP_FREE_MB_BROWSER": "100"})
+        g = self.guard(env={heavy.env_name('MIN_FREE_PCT_BROWSER'): "30", heavy.env_name('MIN_SWAP_FREE_MB_BROWSER'): "100"})
         self.assertEqual(g.browser_floors(), (30.0, 100.0))
-        g = self.guard(env={"BGD_MIN_FREE_PCT_BROWSER": "lots"})
+        g = self.guard(env={heavy.env_name('MIN_FREE_PCT_BROWSER'): "lots"})
         self.assertEqual(g.browser_floors(), (14.0, 512.0))
         self.assertIn("ignoring", self.err.getvalue())
 
@@ -396,7 +396,7 @@ class QueueTests(GuardCase):
         self.assertEqual(self.guard(level=2, free=20).run("lint", [PY, "-c", "pass"], wait=0), 0)
         heavy.remove_file(self.heavy_dir("queue", "custom-floor.json"))
         self.ticket("default-floor", kind="browser", browser_floors=[14, 512])
-        g = self.guard(level=2, free=20, env={"BGD_MIN_FREE_PCT_BROWSER": "30"})
+        g = self.guard(level=2, free=20, env={heavy.env_name('MIN_FREE_PCT_BROWSER'): "30"})
         self.assertEqual(g.run("lint", [PY, "-c", "pass"], wait=0), heavy.EX_TEMPFAIL)
 
     def test_browser_lock_reserves_only_browser_including_queued_followers(self):
@@ -452,14 +452,14 @@ class QueueTests(GuardCase):
     def test_inherited_runs_take_no_ticket_and_missing_kind_ignores_outer_slot_queue(self):
         self.hold("slot-1", pid=os.getpid())
         self.ticket("waiting-for-outer-slot", kind="browser")
-        g = self.guard(level=2, env={"BGD_HEAVY_HELD": "1"})
+        g = self.guard(level=2, env={heavy.env_name('HEAVY_HELD'): "1"})
         self.assertEqual(g.run("test", [PY, "-c", "pass"], wait=0), 0)
         self.assertEqual(g.run("browser", [PY, "-c", "pass"], wait=0), 0)
         self.assertEqual(os.listdir(self.heavy_dir("queue")), ["waiting-for-outer-slot.json"])
 
     def test_nested_missing_kind_waits_without_ever_taking_ticket(self):
         self.hold("browser", kind="browser")
-        g = self.guard(env={"BGD_HEAVY_HELD": "1"})
+        g = self.guard(env={heavy.env_name('HEAVY_HELD'): "1"})
         seen = []
         self.clock.on_sleep = lambda _: seen.append(g._records("queue"))
         self.assertEqual(g.run("browser", [PY, "-c", "pass"], wait=2), heavy.EX_TEMPFAIL)
@@ -661,7 +661,7 @@ class QueueReviewTests(GuardCase):
         self.assertIn("waiting:   0", self.out.getvalue())
 
     def test_nested_browser_retains_floor_and_no_ticket(self):
-        g = self.guard(free=13, env={"BGD_HEAVY_HELD": "1"})
+        g = self.guard(free=13, env={heavy.env_name('HEAVY_HELD'): "1"})
         self.assertEqual(g.run("browser", [PY, "-c", "pass"], wait=0), heavy.EX_TEMPFAIL)
         self.assertIn("browser floor", self.err.getvalue())
         self.assert_empty_queue()
@@ -831,7 +831,7 @@ class QueueReviewTests(GuardCase):
             self.assertEqual(g.status(), 0)
 
     def test_malformed_configuration_never_prints_under_admission(self):
-        keys = ("BGD_MAX_SLOTS", "BGD_MIN_FREE_PCT_BROWSER", "BGD_MIN_SWAP_FREE_MB_BROWSER")
+        keys = (heavy.env_name('MAX_SLOTS'), heavy.env_name('MIN_FREE_PCT_BROWSER'), heavy.env_name('MIN_SWAP_FREE_MB_BROWSER'))
         warn, say = heavy.Guard._warn, heavy.Guard._say
         for operation in ("status", "run"):
             for key in keys:
@@ -1376,9 +1376,9 @@ class RunTests(GuardCase):
         self.assertEqual(env["GOMEMLIMIT"], "768MiB")  # empty counts as unset
         self.assertEqual(env["GOMAXPROCS"], "2")  # set values are kept
         self.assertEqual(env["GOFLAGS"], "-p=2")
-        self.assertEqual(env["BGD_HEAVY_HELD"], "1")
-        self.assertEqual(env["BGD_HEAVY_KIND"], "browser")
-        self.assertEqual(env["BGD_HEAVY_LOCKS"], "browser")
+        self.assertEqual(env[heavy.env_name('HEAVY_HELD')], "1")
+        self.assertEqual(env[heavy.env_name('HEAVY_KIND')], "browser")
+        self.assertEqual(env[heavy.env_name('HEAVY_LOCKS')], "browser")
 
     def test_multi_flag_variables_get_missing_caps_appended(self):
         g = self.guard(env={"NODE_OPTIONS": "--unhandled-rejections=strict", "GOFLAGS": "-mod=mod"})
@@ -1396,8 +1396,8 @@ class RunTests(GuardCase):
         self.assertEqual(self.guard().run("light", cmd), 0)
         with open(out) as fh:
             env = json.load(fh)
-        self.assertNotIn("BGD_HEAVY_HELD", env)
-        self.assertEqual(env["BGD_HEAVY_KIND"], "light")
+        self.assertNotIn(heavy.env_name('HEAVY_HELD'), env)
+        self.assertEqual(env[heavy.env_name('HEAVY_KIND')], "light")
 
     def test_fuzz_runs_niced(self):
         out = os.path.join(self.tmp, "nice")
@@ -1437,7 +1437,7 @@ class NestedTests(GuardCase):
     def test_nested_run_takes_no_slot(self):
         self.hold("slot-1")
         path, cmd = self.sentinel_cmd()
-        g = self.guard(level=2, env={"BGD_HEAVY_HELD": "1"})
+        g = self.guard(level=2, env={heavy.env_name('HEAVY_HELD'): "1"})
         self.assertEqual(g.run("test", cmd, wait=0), 0)
         self.assertTrue(os.path.exists(path))
         self.assertEqual(self.heavy_slots(), ["slot-1"])
@@ -1448,7 +1448,7 @@ class NestedTests(GuardCase):
 
     def test_nested_run_skips_mode_gate(self):
         self.write_mode({"mode": "paused"})
-        g = self.guard(env={"BGD_HEAVY_HELD": "1"})
+        g = self.guard(env={heavy.env_name('HEAVY_HELD'): "1"})
         self.assertEqual(g.run("build", [PY, "-c", "pass"], wait=0), 0)
 
     def test_nested_run_does_not_need_memory_readings(self):
@@ -1457,31 +1457,31 @@ class NestedTests(GuardCase):
         def reader():
             calls.append(1)
             return heavy.Memory(level=4)
-        g = self.guard(env={"BGD_HEAVY_HELD": "1"}, reader=reader)
+        g = self.guard(env={heavy.env_name('HEAVY_HELD'): "1"}, reader=reader)
         self.assertEqual(g.run("test", [PY, "-c", "pass"], wait=0), 0)
         self.assertEqual(calls, [])
 
     def test_nested_browser_uses_inherited_lock(self):
         self.hold("browser", kind="browser")
-        g = self.guard(env={"BGD_HEAVY_HELD": "1", "BGD_HEAVY_LOCKS": "browser"})
+        g = self.guard(env={heavy.env_name('HEAVY_HELD'): "1", heavy.env_name('HEAVY_LOCKS'): "browser"})
         self.assertEqual(g.run("browser", [PY, "-c", "pass"], wait=0), 0)
 
     def test_nested_browser_without_the_lock_must_take_it(self):
         self.hold("browser", kind="browser")
-        g = self.guard(env={"BGD_HEAVY_HELD": "1"})
+        g = self.guard(env={heavy.env_name('HEAVY_HELD'): "1"})
         self.assertEqual(g.run("browser", [PY, "-c", "pass"], wait=0), heavy.EX_TEMPFAIL)
         self.assertIn("browser lock is held", self.err.getvalue())
 
     def test_held_zero_is_not_nested(self):
         self.hold("slot-1")
-        g = self.guard(level=2, env={"BGD_HEAVY_HELD": "0"})
+        g = self.guard(level=2, env={heavy.env_name('HEAVY_HELD'): "0"})
         self.assertEqual(g.run("test", [PY, "-c", "pass"], wait=0), heavy.EX_TEMPFAIL)
 
 
 class CIModeTests(GuardCase):
     def test_ci_without_run_dir_is_continuous_with_linux_readers(self):
         missing = os.path.join(self.tmp, "absent")
-        g = heavy.Guard(env={"CI": "true", "BGD_RUN_DIR": missing, "RUNNER_TEMP": self.tmp,
+        g = heavy.Guard(env={"CI": "true", heavy.env_name('RUN_DIR'): missing, "RUNNER_TEMP": self.tmp,
                              "HOME": self.tmp, "PATH": os.environ.get("PATH", "")},
                         platform="darwin", clock=self.clock,
                         stdout=io.StringIO(), stderr=io.StringIO())
@@ -1527,7 +1527,7 @@ class ProcessTests(GuardCase):
 
     def env(self, **extra):
         env = clean_environ()
-        env["BGD_RUN_DIR"] = self.run_dir
+        env[heavy.env_name('RUN_DIR')] = self.run_dir
         env.update(extra)
         return env
 
@@ -1576,7 +1576,7 @@ class ProcessTests(GuardCase):
         self.hold("slot-1", pid=os.getpid())
         events = os.path.join(self.tmp, "events.jsonl")
         children = []
-        env = self.env(BGD_MAX_SLOTS="1")
+        env = self.env(**{heavy.env_name('MAX_SLOTS'): "1"})
         try:
             for index in range(5):
                 code = ("import json, os, time; "
@@ -1783,7 +1783,7 @@ sys.exit(g.run("test", [sys.executable, "-c", "open(" + repr(sentinel) + ", 'w')
         wrapper = subprocess.Popen(
             ["sh", "-c", '"$@" 2>/dev/null; echo $? > "$RCFILE"', "sh",
              PY, HEAVY_PATH, "run", "--kind", "test", "--wait", "120", "--", PY, "-c", "pass"],
-            env=self.env(BGD_MAX_SLOTS="1", RCFILE=rcfile))
+            env=self.env(**{heavy.env_name('MAX_SLOTS'): "1"}, RCFILE=rcfile))
         try:
             waiting = self.heavy_dir("waiting")
             deadline = time.monotonic() + 15
@@ -1818,7 +1818,7 @@ sys.exit(g.run("test", [sys.executable, "-c", "open(" + repr(sentinel) + ", 'w')
 class CLITests(GuardCase):
     def cli(self, *args):
         env = clean_environ()
-        env["BGD_RUN_DIR"] = self.run_dir
+        env[heavy.env_name('RUN_DIR')] = self.run_dir
         return subprocess.run([PY, HEAVY_PATH] + list(args), env=env, capture_output=True,
                               text=True, timeout=60)
 
@@ -1871,7 +1871,7 @@ class ArgonReviewTests(GuardCase):
 
     def test_closed_stderr_does_not_crash_a_refusal(self):
         self.write_mode({"mode": "paused"})
-        g = self.guard(env={"BGD_MAX_SLOTS": "many"})  # warns at creation too
+        g = self.guard(env={heavy.env_name('MAX_SLOTS'): "many"})  # warns at creation too
         g.err = self.broken_stderr()
         g._warn("heavy: probe")
         path, cmd = self.sentinel_cmd()
@@ -2041,7 +2041,7 @@ class NotifyResolveTests(NotifyCase):
         self.assertEqual(detach.call_count, 1)
 
     def test_nested_runs_ignore_notify_and_run_inline(self):
-        g = self.guard(env=self.notify_env(HEAVY_NOTIFY=AGENT, BGD_HEAVY_HELD="1"))
+        g = self.guard(env=self.notify_env(HEAVY_NOTIFY=AGENT, **{heavy.env_name('HEAVY_HELD'): "1"}))
         path, cmd = self.sentinel_cmd()
         with patch.object(heavy.Guard, "_detach", side_effect=AssertionError("detached")):
             self.assertEqual(g.run("test", cmd), 0)
@@ -2059,10 +2059,10 @@ class NotifyResolveTests(NotifyCase):
         self.assertEqual(self.paseo_calls(), [])
 
     def test_job_env_drops_notify_variables(self):
-        g = self.guard(env=self.notify_env(HEAVY_NOTIFY=AGENT, BGD_HEAVY_NOTIFY_AGENT=AGENT,
-                                           BGD_HEAVY_NOTIFY_FD="9", BGD_HEAVY_NOTIFY_LOG="/x"))
+        g = self.guard(env=self.notify_env(HEAVY_NOTIFY=AGENT, **{heavy.env_name('HEAVY_NOTIFY_AGENT'): AGENT},
+                                           **{heavy.env_name('HEAVY_NOTIFY_FD'): "9"}, **{heavy.env_name('HEAVY_NOTIFY_LOG'): "/x"}))
         env = g.child_env("test", True, set())
-        for key in ("HEAVY_NOTIFY", "BGD_HEAVY_NOTIFY_AGENT", "BGD_HEAVY_NOTIFY_FD", "BGD_HEAVY_NOTIFY_LOG"):
+        for key in ("HEAVY_NOTIFY", heavy.env_name('HEAVY_NOTIFY_AGENT'), heavy.env_name('HEAVY_NOTIFY_FD'), heavy.env_name('HEAVY_NOTIFY_LOG')):
             self.assertNotIn(key, env)
         self.assertEqual(env["PASEO_BIN"], self.paseo)
 
@@ -2293,8 +2293,8 @@ class NotifyChildTests(NotifyCase):
             os.close(r)
             r = None
         g = self.guard(env=self.notify_env(
-            BGD_HEAVY_NOTIFY_AGENT=AGENT, BGD_HEAVY_NOTIFY_FD=str(w), BGD_HEAVY_NOTIFY_ACK_FD=str(ack_r),
-            BGD_HEAVY_NOTIFY_LOG=os.path.join(self.tmp, "job.log"), **env))
+            **{heavy.env_name('HEAVY_NOTIFY_AGENT'): AGENT}, **{heavy.env_name('HEAVY_NOTIFY_FD'): str(w)}, **{heavy.env_name('HEAVY_NOTIFY_ACK_FD'): str(ack_r)},
+            **{heavy.env_name('HEAVY_NOTIFY_LOG'): os.path.join(self.tmp, "job.log")}, **env))
         return g, r
 
     def read_all(self, r):
@@ -2351,7 +2351,7 @@ class NotifyProcessTests(NotifyCase):
 
     def cli_env(self, **extra):
         env = clean_environ()
-        env["BGD_RUN_DIR"] = self.run_dir
+        env[heavy.env_name('RUN_DIR')] = self.run_dir
         env.update(self.notify_env(**extra))
         return env
 
@@ -2376,7 +2376,7 @@ class NotifyProcessTests(NotifyCase):
         code = ("import os, time\n"
                 "deadline = time.monotonic() + 60\n"
                 f"while not os.path.exists({go!r}) and time.monotonic() < deadline: time.sleep(0.05)\n"
-                "print('job says hello', os.environ.get('HEAVY_NOTIFY'), os.environ.get('BGD_HEAVY_NOTIFY_FD'))\n"
+                f"print('job says hello', os.environ.get('HEAVY_NOTIFY'), os.environ.get({heavy.env_name('HEAVY_NOTIFY_FD')!r}))\n"
                 "raise SystemExit(3)\n")
         res = subprocess.run([PY, HEAVY_PATH, "run", "--kind", "light", "--notify", AGENT, "--", PY, "-c", code],
                              env=self.cli_env(HEAVY_NOTIFY=AGENT), capture_output=True, text=True, timeout=60)

@@ -1,3 +1,4 @@
+import { envName } from '../config.mjs';
 // No browser is launched: invalid arguments must fail before launch().
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -8,7 +9,7 @@ const shot = fileURLToPath(new URL('./shot.mjs', import.meta.url));
 function run(args, stack = '0') {
   return spawnSync(process.execPath, [shot, ...args], {
     encoding: 'utf8',
-    env: { ...process.env, BGD_STACK: stack },
+    env: { ...process.env, [envName('STACK')]: stack },
     timeout: 10_000
   });
 }
@@ -17,6 +18,7 @@ for (const [args, message] of [
   [[], /nothing to do: pass --out PATH, --probe, or both/],
   [['--unknown'], /Unknown option '--unknown'/],
   [['--probe', '--vp', 'bad'], /--vp/],
+  [['--probe', '--theme', 'unknown-theme'], /--theme/],
   [['--probe', '--storage', 'bad'], /--storage: not JSON/],
   [['--probe', '--token', 'bad'], /--token: expected/]
 ]) {
