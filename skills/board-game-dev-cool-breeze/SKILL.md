@@ -181,8 +181,10 @@ ports that are scanned and persisted, tmux sessions with `-e` for environment, p
 passed through when present but never hardcoded, everything self-hosted so the game runs on an
 intranet over plain HTTP, and a content hash in every changing asset URL.
 
-The default host and domain come from the environment (`BGD_DEFAULT_HOST`, `BGD_DEFAULT_DOMAIN`),
-never from the repository. Unless the owner says otherwise:
+Private defaults come from the environment, never from the repository: `BGD_DEFAULT_DOMAIN` gives
+the default URL `https://<game>.<domain>` (`BGD_DEFAULT_HOST` overrides the `<game>` label), and
+`BGD_DEPLOY_HOST` names the machine production runs on, reached over ssh, where `self_host.py` runs.
+When a variable is unset, ask the owner. Unless the owner says otherwise:
 
 - on a local machine, develop with `dev-start`, not `start`;
 - after finishing and committing, run `self_host.py redeploy` in the tmux session
