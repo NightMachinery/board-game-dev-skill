@@ -1,0 +1,26 @@
+{
+  "id": "persian-safavid-illuminated-garden-night",
+  "name": "Persian Safavid illuminated garden, night",
+  "mode": "dark",
+  "inherits": ["persian-safavid-illuminated-garden"],
+  "artDirection": "style.md",
+  "tokens": {
+    "table": "oklch(0.22 0.06 262)",
+    "table-glow": "oklch(0.33 0.08 262 / 0.75)",
+    "panel": "oklch(0.27 0.065 262)",
+    "panel-sunken": "oklch(0.19 0.05 262)",
+    "fg": "oklch(0.94 0.02 85)",
+    "fg-muted": "oklch(0.78 0.03 85)",
+    "rule": "oklch(0.42 0.07 262)",
+    "rule-strong": "oklch(0.58 0.07 262)",
+    "accent": "oklch(0.78 0.13 85)",
+    "on-accent": "oklch(0.18 0.03 265)",
+    "accent-soft": "oklch(0.33 0.07 262)",
+    "accent-soft-fg": "oklch(0.78 0.13 85)",
+    "gild": "oklch(0.78 0.13 85)",
+    "focus": "oklch(0.78 0.13 85)",
+    "vermilion-ink": "oklch(0.72 0.15 32)",
+    "card-paper": "oklch(0.27 0.065 262)",
+    "card-ink": "oklch(0.94 0.02 85)"
+  }
+}
