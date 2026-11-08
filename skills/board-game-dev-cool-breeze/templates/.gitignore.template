@@ -1,0 +1,10 @@
+# Merge these into the adopted game's ignore rules before running tools.
+TASKS.org
+.self-host/
+node_modules/
+__pycache__/
+*.pyc
+.svelte-kit/
+web/build/
+server/bin/
+.cache/

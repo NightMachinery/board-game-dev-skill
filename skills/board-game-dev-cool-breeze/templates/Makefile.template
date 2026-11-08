@@ -1,0 +1,71 @@
+# Copy as Makefile. Adapt package scripts, generator/output path and cmd/server.
+# Preserve the lockfile and change this toolchain pin with self_host.py/go.mod.
+SHELL := /bin/sh
+.NOTPARALLEL:
+.DEFAULT_GOAL := verify-quick
+export GOTOOLCHAIN := go1.26.3
+export PYTHONDONTWRITEBYTECODE := 1
+HEAVY := python3 $(CURDIR)/tools/heavy.py
+GO_PKGS ?= ./...
+GO_RUN ?=
+GREP ?=
+PW_ARGS ?=
+TEST_TIMEOUT ?= 20m
+GEN_DIR ?= web/src/lib/wire
+
+.PHONY: install install-offline dev verify-quick verify verify-full e2e gen gen-check build shots test-go test-race test-web check-web lint test-tools
+
+install:
+	$(HEAVY) run --kind install -- go -C server mod download
+	$(HEAVY) run --kind install -- pnpm install --frozen-lockfile
+	$(HEAVY) run --kind install -- pnpm exec playwright install chromium --no-shell
+
+install-offline:
+	GOPROXY=off $(HEAVY) run --kind install -- go -C server mod download
+	$(HEAVY) run --kind install -- pnpm install --offline --frozen-lockfile
+
+dev:
+	$(HEAVY) run --kind light -- python3 self_host.py dev-start
+
+test-go:
+	$(HEAVY) run --kind test -- go -C server test -shuffle=on -timeout $(TEST_TIMEOUT) $(if $(GO_RUN),-run '$(GO_RUN)') $(GO_PKGS)
+
+test-race:
+	$(HEAVY) run --kind test -- go -C server test -race -shuffle=on -timeout $(TEST_TIMEOUT) $(GO_PKGS)
+
+test-web:
+	$(HEAVY) run --kind test -- pnpm -C web test
+
+check-web:
+	$(HEAVY) run --kind check -- pnpm -C web check
+
+lint:
+	$(HEAVY) run --kind lint -- go -C server vet ./...
+	$(HEAVY) run --kind lint -- pnpm -C web lint
+
+test-tools:
+	$(HEAVY) run --kind test -- python3 -m unittest
+	$(HEAVY) run --kind test -- node --test tools/chrome/cli.test.mjs tools/art/art.test.mjs
+
+gen:
+	$(HEAVY) run --kind build -- go -C server generate ./...
+
+gen-check:
+	$(HEAVY) run --kind build -- python3 tools/check_generated.py '$(GEN_DIR)' -- go -C server generate ./...
+
+build:
+	$(HEAVY) run --kind build -- pnpm -C web build
+	$(HEAVY) run --kind build -- go -C server build -trimpath -o bin/server ./cmd/server
+
+e2e: build
+	$(HEAVY) run --kind browser -- pnpm -C e2e exec playwright test $(if $(GREP),--grep '$(GREP)') $(PW_ARGS)
+
+shots: build
+	$(HEAVY) run --kind browser -- pnpm -C e2e exec playwright test --project shots $(PW_ARGS)
+
+verify-quick: lint check-web gen-check test-go test-web test-tools
+
+verify: verify-quick test-race build
+
+# Set up e2e's controlled test server in its Playwright config, never a worker dev server.
+verify-full: verify e2e shots

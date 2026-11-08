@@ -8,7 +8,8 @@ individual entries. Original illustrations only, no copied official game art.
 ## Style prefix (verbatim)
 
 > Original illustration with a clear silhouette, a restrained palette and
-> readable shapes at card size. No lettering, numbers, logos or watermarks.
+> readable shapes at card size. No lettering, pseudo-writing, numbers, logos,
+> painted frames or watermarks.
 
 ## Palette
 

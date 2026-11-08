@@ -1,0 +1,159 @@
+# Project working agreement
+
+Replace placeholders and commit this file before parallel work starts. Keep
+private run state and TASKS.org outside tracked content. This agreement applies
+to the adopted game, not to the skill repository holding the template.
+
+## Architecture and locations
+
+[Describe the game, authoritative engine, room actor, persistence and protocol.]
+
+- `server/internal/engine/`: pure rules, legal actions, state and observations.
+- `server/internal/view/`: per-viewer DTOs, including explicit legal choices.
+- `server/internal/room/`: one actor per room, authentication and persistence.
+- `server/cmd/server/`: process entry point, HTTP and WebSocket transport.
+- `web/src/lib/`: thin Svelte 5 client. `web/static/`: local shipped assets.
+- `docs/rules/`: rules in our own words; `decisions.md` records ambiguities.
+- `docs/`: architecture, protocol, testing, deployment and current limitations.
+- `art/`: game subjects and approved originals. `themes/`: reusable asset packs.
+- `tools/project.json`: public tool configuration; secrets belong in environment.
+- [List coordinator-owned generated files, shared contracts and single writers.]
+
+## Resource guard, browsers and processes
+
+Run compilers, tests, lint, installs, image generation and browsers through
+`python3 tools/heavy.py run --kind KIND --wait 3600 -- COMMAND`. Submit once;
+do not poll status or retry exit 75 in a loop. It means policy or resources
+refused the job. Only the coordinator grants high priority. One heavy command
+per worker at a time. For detached Paseo work use `HEAVY_NOTIFY=auto` on the
+outer guard, never exported and never inside Makefile recipes, then end the
+turn. The guard's event reports completion, including failure. Nested commands
+reuse their parent's slot. Read mode and memory policy in `tools/README.md`.
+
+Browser work holds the exclusive browser lock. Use only Playwright Chromium or
+Chrome for Testing, headless with a unique temporary profile, closed in finally
+and on process exit. Never drive the owner's everyday browser or attach its
+profile. Use `tools/chrome/` for screenshots and DOM probes. Do not trust a
+successful bounds probe as evidence that a screen looks good: inspect images.
+
+Stop only your own processes, by verified PID. Never broad-match a process
+name, `pgrep -f` variable or `killall`. Killing a parent may leave children;
+check the owned profile/port after cleanup. Preserve owner-managed tmux servers.
+Do not start unattended dev servers in worker worktrees. Tests use controlled
+test builds and independent ports. When developing on a local machine use
+`python3 self_host.py dev-start` instead of `start`, unless told otherwise.
+
+Use real load-bearing binaries (`command ...` in shell code). Quote literal
+paths and patterns. On macOS assume BSD userland unless calling GNU tools by
+their g-prefixed name. Read `CODEX_BIN` rather than invoking a shell wrapper.
+Pin the Go toolchain in the Makefile and hosting script. Pass optional proxy
+environment variables through; never require or hardcode a proxy.
+
+## Engine and room contracts
+
+Keep the engine deterministic and replayable. No I/O, clocks, concurrency,
+logging or global randomness. Explicit seeded entropy enters at the engine
+boundary. Prefer integer rules arithmetic and enum-indexed arrays; no unordered
+map iteration may affect actions, state, events or output. Clone independently.
+[State the exact package import allow-list and enforce it with a test/linter.]
+
+The server validates an action key by membership in the current engine legal
+list and applies that engine-owned action. Never construct rules actions from
+client payloads. Per-viewer views omit every hidden fact the viewer cannot
+know, including spectators and logs. Distinguish public facts, private player
+knowledge and server-only state. Test adversarial viewers and stale/replayed
+requests. Room actors serialize state changes. Persist rules/preset versions
+and deterministic entropy. Ignore late worker results after undo/restore.
+
+Wire fields use explicit JSON names, empty arrays rather than null, and typed
+codes/events rather than English prose. Keep optionality unambiguous. Write
+rules tests from docs, not by copying implementation assumptions.
+
+## Client, accessibility and tooltips
+
+Svelte 5 runes and event properties only. Prefer derived values; avoid effects
+that write state. Render whole server views with `$state.raw`. The client renders
+legal choices and sends their keys; it computes no costs, rules or legality.
+Keep leaf components usable in a standalone gallery. Use stable `data-act`
+action keys and semantic fixture anchors for browser tests.
+
+Phone-first layouts, no horizontal board scroll, logical CSS for direction.
+Translate all user-visible text and accessible names. User names use `dir="auto"`.
+State must remain legible when animation is disabled. Launch with one deliberate
+theme chosen with the owner. One selected theme pack controls all colours and
+the CSS colour scheme. Add further packs later. A dark look is its own explicit
+theme, which may inherit art; do not add automatic light/dark switching from
+the OS. If the game ships one theme, expose no redundant theme selector.
+
+Use the custom tooltip helper, never native `title=` attributes. Each glyph or
+micro-element gets short translated meaning unless it repeats a visible label.
+Use only server-supplied numbers. The innermost registered anchor wins. Fine
+pointer hover waits briefly, keyboard focus shows it, Escape closes it. Passive
+touch tap shows; actionable touch tap still acts, long-press shows and its
+release never acts. A tap closing an open tip is swallowed. One tip at a time.
+Keep icon-only controls accessibly named. Tooltips cannot be the only route to
+information needed for a move: card sheets and rules must carry it too.
+
+Linked previews are required: a tooltip may carry at most two caller-rendered
+real-component previews in a joined second panel, beside on wide screens and
+on the bubble's far side on phones. No nested stack. An optional stable
+`rulesId` shows a translated More in Rules link, closes the tip and opens that
+rules section. Only the link takes the pointer; preserve hover intent and its
+touch-tap exception. The complete rules reference is also required: a live-board
+desktop side drawer, tall phone bottom sheet, and `/rules` page sharing the same
+translated sections, stable ids and real component diagrams. Home links the
+page and the game menu opens the overlay. Replace skeleton rule text before
+shipping; never treat placeholder translation keys as completed rules.
+
+Construct WebSocket URLs from the page origin with ws/wss. Plain HTTP and
+intranets must work, including clipboard fallback. Never use remote fonts,
+assets or captcha. Keep identity tokens out of URLs, logs and screenshots.
+
+## Assets and documentation
+
+Hand-author vectors through render, inspect and revise loops. Check final
+batches in a browser. Generate bitmaps one at a time in the codex lane. Keep
+approved pixel-identical lossless WebP originals, derive shipped AVIF with byte
+budgets, and require an explicit review of the exact attempt. Rejected attempts
+stay private. Use the per-theme index with content-hashed URLs; missing art is
+a procedural placeholder. No copied official art, logos or frame designs.
+Keep painting quality rules in the theme's style file. Self-host licensed fonts.
+
+Update docs with changed behavior and decisions. Keep README short: value,
+quick start and links to details. No tables in prose docs. Record provenance
+and asset licences. Keep private state, run logs, generated review sheets,
+service targets, credentials, hostnames and personal data out of public commits.
+
+## Commits, deployment and unattended work
+
+Stay on the assigned branch/worktree. Touch only owned paths. Preserve other
+sessions' changes. Split cohesive changes into atomic commits. Check status
+immediately before committing, commit with explicit pathspecs, then inspect
+`git show --stat`. Include the actual authoring model in the required trailer.
+Do not rewrite published history. A worker does not push unless its brief
+assigns that duty. Report signing failures and use unsigned commits if needed.
+
+After finishing and committing, run `python3 self_host.py redeploy` inside tmux
+session `<repo-name>-setup`, wait 120 seconds, then read its logs. A worker in an
+isolated worktree reports deployment needs to the coordinator instead of
+deploying that worktree. Never claim a serving URL until startup checks pass.
+
+Runs unattended: the brief settles routine design questions within its scope.
+Read the private learnings index and recovery note first. Check whether the
+slice is already committed. Save a result even after a failed check, with first
+line DONE or PARTIAL, commits, check output, artifact paths/sizes, concerns and
+single-writer requests. Record coordinator messages in the worker checkpoint;
+the owner's verbatim file contains only the owner's words.
+
+Owner phrases are literal steering commands, not agent-generated suggestions:
+
+- "switch to nightshift [HH:MM-HH:MM]": set the guard's window and persist it;
+  arrange approved wakeups and wind-down at its edges.
+- "switch to continuous": clear the window schedule and set continuous mode.
+- "pause <project>": wind down owned heavy jobs, then set paused mode.
+- "resume <project>": restore the prior mode and resume from durable state.
+- "<project> status": rebuild the report from commits, results and logs.
+
+Maintain one private state directory with briefs, results, checkpoints and an
+artifact retention ledger. Arm completion notification when launching a job;
+do not spend model turns polling. On interruption, checkpoint before yielding.
