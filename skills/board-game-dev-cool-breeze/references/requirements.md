@@ -63,7 +63,29 @@ labels are translatable text. The project's own tooltip helper is used, never th
 - any tap closes an open tooltip and is swallowed, so it never acts on what lies beneath;
 - one tooltip at a time, the innermost one under the pointer or finger.
 
-A lint test fails on any native `title=`. `templates/web/` has the helper.
+- **Stacked tooltips.** A tooltip can carry a stack: a second panel joined to the bubble that
+  previews the things the tooltip refers to, drawn as the real components (the card a symbol makes
+  free, the token a chip stands for). It sits beside the bubble on wide screens and on its far side
+  on phones, holds at most two items, and has no stack of its own, so a tooltip is never more than
+  two levels deep.
+- **A link into the rules.** A tooltip whose topic has a section in the rules reference shows a
+  "More in Rules" link that opens the rules at that section and closes the tooltip. Only the link
+  takes the pointer; the bubble lets board clicks pass. Hover intent gives a moving pointer time
+  to reach the link. On touch, the link is the one tap inside a tooltip that acts.
+
+A lint test fails on any native `title=`. `templates/web/` has the helper. The custom, stacked
+tooltips are a must-have, not a polish item.
+
+## The rules reference in the app
+
+A must-have. The complete rules, in the game's own words, built from the real components and the
+tooltips' concept diagrams, so the pictures in the rules are the pieces on the board:
+
+- in a game, a side drawer on desktop that leaves the board visible and live, and a tall bottom
+  sheet on phones, opened from the game menu;
+- the same content as a page at `/rules`, reachable from Home;
+- sections with stable ids, which tooltips link to;
+- every word through the translation tables, like the rest of the client.
 
 ## One look per game
 
