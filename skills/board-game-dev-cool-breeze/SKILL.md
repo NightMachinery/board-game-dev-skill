@@ -121,8 +121,10 @@ each milestone's acceptance and the slices that usually belong to it.
   the whole pipeline before bulk production; vectors drawn by a strong model in a render, look,
   correct loop, bitmaps generated one at a time; approved originals committed losslessly; shipped
   files derived and content-hashed.
-- **Polish before review**: animations, sound, the tutorial, tooltips and explanatory UI are built
-  before the main review loop, so reviewers do not rediscover planned gaps.
+- **Polish before review**: animations, sound, the tutorial and explanatory UI are built before the
+  main review loop, so reviewers do not rediscover planned gaps. Two of these are must-haves, not
+  optional polish: the custom, stacked tooltips on every element, and the in-app rules reference
+  (a drawer or sheet over the live board, and `/rules`), which tooltips link into.
 - **Review loop**: screenshot matrices from named states across sizes and directions, scripted
   probes for overflow, contrast, targets and occlusion, and real games played by a reviewer agent.
   Stop when no critical gameplay issue remains and new findings are small.
