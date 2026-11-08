@@ -20,9 +20,13 @@ class HostingTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        for key, value in {'STATE': self.root, 'CONFIG_FILE': self.root / 'config.json',
-                           'CADDYFILE': self.root / 'Caddyfile',
-                           'STATIC_DIR': self.root / 'build'}.items():
+        state = self.root / '.self-host'
+        state.mkdir()
+        config = dict(host.HOSTING, static='caddy', static_dir='build')
+        for key, value in {'ROOT': self.root, 'STATE': state, 'CONFIG_FILE': state / 'config.json',
+                           'CADDYFILE': self.root / 'Caddyfile', 'STATIC_DIR': self.root / 'build',
+                           'BIN': state / 'bin/game', 'SERVER_DIR': self.root / 'server',
+                           'WEB_DIR': self.root / 'web', 'HOSTING': config}.items():
             p = patch.object(host, key, value)
             p.start()
             self.addCleanup(p.stop)
@@ -88,23 +92,104 @@ class HostingTests(unittest.TestCase):
         self.assertIn(f'GOTOOLCHAIN={host.GO_TOOLCHAIN}', args)
         self.assertIn("'a b'", args[-1])
 
-    def test_all_serving_commands_stop_both_modes_first_and_remember_ports(self):
-        for command in ('setup', 'redeploy', 'start', 'dev-start'):
-            with self.subTest(command=command), patch.object(host, 'stop_sessions') as stop, \
-                 patch.object(host, 'build') as build, patch.object(host, 'build_server'), \
+    def test_build_and_check_before_stop_then_swap_and_start(self):
+        for command in ('setup', 'redeploy'):
+            events = []
+            candidate = Mock()
+            with self.subTest(command=command), patch.object(host, 'build', side_effect=lambda **kw: events.append('build') or candidate), \
+                 patch.object(host, 'check_candidate', side_effect=lambda *a: events.append('check')), \
+                 patch.object(host, 'stop_sessions', side_effect=lambda: events.append('stop')), \
+                 patch.object(host, 'install_candidate', side_effect=lambda *a: events.append('swap')), \
                  patch.object(host, 'port_free', return_value=True), \
                  patch.object(host, 'allocate_ports', return_value={'server': 42111, 'dev': 42112}), \
-                 patch.object(host, 'start_components') as start, patch.object(host, 'apply_caddy') as apply:
+                 patch.object(host, 'start_components', side_effect=lambda *a: events.append('start')), \
+                 patch.object(host, 'apply_caddy'):
                 host.STATIC_DIR.mkdir(exist_ok=True)
                 (host.STATIC_DIR / '200.html').write_text('html')
-                events = []
-                stop.side_effect = lambda: events.append('stop')
-                start.side_effect = lambda *a: events.append('start')
                 host.deploy(command, 'http://example.test')
-                self.assertEqual(events, ['stop', 'start'])
+                self.assertEqual(events, ['build', 'check', 'stop', 'swap', 'start'])
                 self.assertEqual(json.loads(host.CONFIG_FILE.read_text())['ports']['server'], 42111)
-                self.assertEqual(build.called, command in ('setup', 'redeploy'))
-                self.assertEqual(apply.call_args.args[1], 'dev' if command == 'dev-start' else 'prod')
+
+    def test_failed_build_or_candidate_check_keeps_old_server_and_files(self):
+        host.BIN.parent.mkdir(parents=True)
+        host.BIN.write_text('old binary')
+        host.STATIC_DIR.mkdir()
+        (host.STATIC_DIR / '200.html').write_text('old html')
+        for command in ('setup', 'redeploy'):
+            for stage in ('build', 'check_candidate'):
+                with self.subTest(command=command, stage=stage), patch.object(host, 'build') as build, \
+                     patch.object(host, 'check_candidate') as check, patch.object(host, 'stop_sessions') as stop, \
+                     patch.object(host, 'install_candidate') as swap, patch.object(host, 'start_components') as start:
+                    (build if stage == 'build' else check).side_effect = RuntimeError('candidate failed')
+                    with self.assertRaisesRegex(RuntimeError, 'candidate failed'):
+                        host.deploy(command, 'http://example.test')
+                    stop.assert_not_called(); swap.assert_not_called(); start.assert_not_called()
+                    self.assertEqual(host.BIN.read_text(), 'old binary')
+                    self.assertEqual((host.STATIC_DIR / '200.html').read_text(), 'old html')
+
+    def test_start_and_dev_start_still_stop_both_modes_first(self):
+        for command in ('start', 'dev-start'):
+            events = []
+            with self.subTest(command=command), patch.object(host, 'build') as build, \
+                 patch.object(host, 'build_server', side_effect=lambda: events.append('build-server')), \
+                 patch.object(host, 'stop_sessions', side_effect=lambda: events.append('stop')), \
+                 patch.object(host, 'port_free', return_value=True), \
+                 patch.object(host, 'start_components', side_effect=lambda *a: events.append('start')), \
+                 patch.object(host, 'apply_caddy'):
+                host.STATIC_DIR.mkdir(exist_ok=True)
+                (host.STATIC_DIR / '200.html').touch()
+                host.deploy(command, 'http://example.test')
+                self.assertEqual(events, ['stop', 'build-server', 'start'] if command == 'dev-start' else ['stop', 'start'])
+                build.assert_not_called()
+
+    def test_candidate_build_has_separate_source_dependencies_binary_and_static_output(self):
+        (self.root / 'pnpm-lock.yaml').write_text('lock')
+        (self.root / 'server').mkdir(); (self.root / 'web').mkdir()
+        host.BIN.parent.mkdir(parents=True); host.BIN.write_text('old binary')
+        host.STATIC_DIR.mkdir(); (host.STATIC_DIR / '200.html').write_text('old html')
+        def guarded(kind, argv, *, cwd):
+            self.assertTrue(Path(cwd).resolve().is_relative_to((host.STATE / 'candidates').resolve()))
+            if argv[0] == 'pnpm' and argv[-1] == 'build':
+                (Path(cwd) / 'build').mkdir()
+                (Path(cwd) / 'build/200.html').write_text('new html')
+            if argv[:2] == ['go', 'build']:
+                binary = Path(argv[argv.index('-o') + 1]); binary.write_text('new binary'); binary.chmod(0o755)
+        with patch.object(host, 'guarded', side_effect=guarded) as commands:
+            candidate = host.build(install=True)
+        self.assertEqual(host.BIN.read_text(), 'old binary')
+        self.assertEqual((host.STATIC_DIR / '200.html').read_text(), 'old html')
+        self.assertEqual((candidate.static / '200.html').read_text(), 'new html')
+        self.assertTrue(any(c.args[0] == 'install' for c in commands.call_args_list))
+        host.install_candidate(candidate)
+        self.assertEqual(host.BIN.read_text(), 'new binary')
+        self.assertEqual((host.STATIC_DIR / '200.html').read_text(), 'new html')
+        self.assertEqual((candidate.root / 'previous-binary').read_text(), 'old binary')
+
+    def test_candidate_check_uses_private_data_and_cleans_its_session(self):
+        candidate = host.Candidate(self.root, self.root, self.root / 'new-bin', self.root / 'new-static')
+        with patch.object(host, 'allocate_ports', return_value={'server': 42111, 'dev': 42112}), \
+             patch.object(host, 'tmuxnew') as tmux, patch.object(host, 'wait_health', side_effect=RuntimeError('bad')), \
+             patch.object(host, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'bad'):
+                host.check_candidate(candidate, host.parse_site_url('http://example.test'))
+        self.assertEqual(tmux.call_args.kwargs['cwd'], candidate.tree)
+        self.assertEqual(tmux.call_args.kwargs['env']['BGD_DATA_DIR'], str(self.root / 'check-data'))
+        self.assertEqual(run.call_args.args[0][:2], ['tmux', 'kill-session'])
+
+    def test_embedded_production_proxies_everything_but_dev_still_uses_vite(self):
+        with patch.object(host, 'HOSTING', dict(host.HOSTING, static='embedded')):
+            prod = host.render_caddy_block(host.parse_site_url('http://example.test'), 'prod', {'server': 42111, 'dev': 42112})
+            self.assertIn('reverse_proxy localhost:42111', prod)
+            self.assertNotIn('@backend', prod); self.assertNotIn('file_server', prod)
+            dev = host.render_caddy_block(host.parse_site_url('http://example.test'), 'dev', {'server': 42111, 'dev': 42112})
+            self.assertIn('@backend', dev); self.assertIn('reverse_proxy localhost:42112', dev)
+
+    def test_toolchain_comes_from_makefile_or_explicit_environment(self):
+        (self.root / 'Makefile').write_text('export GOTOOLCHAIN := go1.26.3\n')
+        self.assertEqual(host.go_toolchain({}), 'go1.26.3')
+        self.assertEqual(host.go_toolchain({'GOTOOLCHAIN': 'go1.26.4'}), 'go1.26.4')
+        with self.assertRaises(ValueError):
+            host.go_toolchain({'GOTOOLCHAIN': 'auto'})
 
     def test_failure_stops_components_without_claiming_success(self):
         host.STATIC_DIR.mkdir()

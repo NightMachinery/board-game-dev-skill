@@ -21,6 +21,7 @@ import socket
 import subprocess
 import sys
 import time
+import tempfile
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -39,7 +40,22 @@ BIN = STATE / 'bin' / NAME
 SERVER_DIR = ROOT / HOSTING['server_dir']
 WEB_DIR = ROOT / HOSTING['web_dir']
 STATIC_DIR = ROOT / HOSTING['static_dir']
-GO_TOOLCHAIN = 'go1.26.3'  # Pin this and Makefile.template together, with server/go.mod.
+def go_toolchain(env=None):
+    """The Makefile is the pin source; an explicit environment pin overrides it."""
+    env = os.environ if env is None else env
+    value = env.get('GOTOOLCHAIN')
+    if not value:
+        makefile = ROOT / 'Makefile'
+        if not makefile.exists():
+            makefile = ROOT / 'Makefile.template'  # Standalone template tests.
+        match = re.search(r'^export\s+GOTOOLCHAIN\s*:?=\s*(\S+)', makefile.read_text(), re.M)
+        value = match.group(1) if match else ''
+    if not re.fullmatch(r'go[0-9]+\.[0-9]+\.[0-9]+', value):
+        raise ValueError('export an exact GOTOOLCHAIN pin in Makefile or environment')
+    return value
+
+
+GO_TOOLCHAIN = go_toolchain()
 CADDYFILE = Path(os.environ.get('BGD_CADDYFILE', Path.home() / 'Caddyfile')).expanduser()
 CADDY_DEFAULT_ADMIN = 'localhost:2019'  # Caddy's standard local admin listener.
 CADDY_LOAD_TIMEOUT = 10.0
@@ -107,7 +123,7 @@ def run(argv, *, cwd=ROOT, check=True, capture=False, env=None):
 def tmux_env_args(env=None):
     source = os.environ if env is None else env
     return [item for key, value in source.items() if value and
-            (key in PROXY_ENV_NAMES or key in ('PATH', 'GOTOOLCHAIN', 'BGD_SERVER', 'PORT', 'HOST', 'GOMEMLIMIT'))
+            (key in PROXY_ENV_NAMES or key in ('PATH', 'GOTOOLCHAIN', 'BGD_SERVER', 'PORT', 'HOST', 'GOMEMLIMIT', 'BGD_STATIC_DIR', 'BGD_DATA_DIR'))
             for item in ('-e', f'{key}={value}')]
 
 
@@ -171,25 +187,30 @@ def replace_block(text, block):
 def render_caddy_block(site, mode, ports):
     if mode not in ('prod', 'dev'):
         raise ValueError('unknown mode')
-    # handle preserves /api and /ws prefixes. Static output is adapter-static SPA
-    # output with fallback 200.html; a different router can change try_files.
-    frontend = (f'\t\treverse_proxy localhost:{ports["dev"]}' if mode == 'dev' else
-                f'\t\troot * {json.dumps(str(STATIC_DIR))}\n'
-                '\t\theader Cache-Control "no-cache"\n'
-                '\t\ttry_files {path} /200.html\n\t\tfile_server')
+    static = HOSTING.get('static', 'caddy')
+    if static not in ('caddy', 'embedded'):
+        raise ValueError('hosting.static must be caddy or embedded')
+    if mode == 'prod' and static == 'embedded':
+        body = f"    reverse_proxy localhost:{ports['server']}"
+    else:
+        frontend = (f'\t\treverse_proxy localhost:{ports["dev"]}' if mode == 'dev' else
+                    f'\t\troot * {json.dumps(str(STATIC_DIR))}\n'
+                    '\t\theader Cache-Control "no-cache"\n'
+                    '\t\ttry_files {path} /200.html\n\t\tfile_server')
+        body = f'''    @backend path /api /api/* /ws /health
+    handle @backend {{
+        reverse_proxy localhost:{ports['server']}
+    }}
+    handle {{
+{frontend}
+    }}'''
     return f'''{BEGIN}
 {site.opposite_origin} {{
     redir {site.origin}{{uri}} permanent
 }}
 {site.origin} {{
     encode zstd gzip
-    @backend path /api /api/* /ws /health
-    handle @backend {{
-        reverse_proxy localhost:{ports['server']}
-    }}
-    handle {{
-{frontend}
-    }}
+{body}
 }}
 {END}
 '''
@@ -203,23 +224,121 @@ def guarded(kind, argv, *, cwd=ROOT):
          *argv], cwd=cwd, env=env)
 
 
+@dataclass(frozen=True)
+class Candidate:
+    root: Path
+    tree: Path
+    binary: Path
+    static: Path
+
+
+def project_path(tree, configured):
+    """Resolve build paths inside the candidate, never into the live checkout."""
+    relative = Path(configured)
+    result = (tree / relative).resolve()
+    if relative.is_absolute() or not result.is_relative_to(tree.resolve()):
+        raise ValueError('hosting source/build paths must stay inside the project')
+    return result
+
+
 def build(install=False):
-    if not (ROOT / 'pnpm-lock.yaml').is_file():
+    """Build only in a separate source tree, leaving all live paths untouched."""
+    STATE.mkdir(exist_ok=True)
+    candidates = STATE / 'candidates'
+    candidates.mkdir(exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix='release-', dir=candidates))
+    tree = staging / 'source'
+    excluded = {STATE.resolve(), STATIC_DIR.resolve(), (ROOT / 'server/bin').resolve()}
+    def ignore(directory, names):
+        return [name for name in names if name in
+                ('.git', '.self-host', 'node_modules', '.svelte-kit', '__pycache__', '.cache')
+                or (Path(directory) / name).resolve() in excluded]
+    # Copy symlink targets rather than retaining links back into the live tree.
+    shutil.copytree(ROOT, tree, ignore=ignore)
+    if not (tree / 'pnpm-lock.yaml').is_file():
         raise RuntimeError('a committed root pnpm-lock.yaml is required')
+    server = project_path(tree, HOSTING['server_dir'])
+    web = project_path(tree, HOSTING['web_dir'])
+    static = project_path(tree, HOSTING['static_dir'])
     if install:
-        guarded('install', ['pnpm', 'install', '--frozen-lockfile'])
-        guarded('install', ['go', 'mod', 'download'], cwd=SERVER_DIR)
-    guarded('build', ['pnpm', '--dir', str(WEB_DIR), 'build'])
-    if not (STATIC_DIR / '200.html').is_file():
-        raise RuntimeError('configure adapter-static with fallback 200.html')
-    build_server()
+        guarded('install', ['pnpm', 'install', '--frozen-lockfile'], cwd=tree)
+        guarded('install', ['go', 'mod', 'download'], cwd=server)
+    guarded('build', ['pnpm', '--dir', str(web), 'build'], cwd=tree)
+    if not (static / '200.html').is_file():
+        raise RuntimeError('candidate requires adapter-static fallback 200.html')
+    if HOSTING.get('static', 'caddy') == 'embedded' and HOSTING.get('embed_dir'):
+        destination = project_path(tree, HOSTING['embed_dir'])
+        if destination == static or destination.is_relative_to(static) or static.is_relative_to(destination):
+            raise ValueError('embed_dir must be separate from the static build directory')
+        if destination.exists():
+            shutil.rmtree(destination)  # Only the newly copied candidate's embed output.
+        shutil.copytree(static, destination)
+    binary = staging / NAME
+    build_server(output=binary, cwd=server)
+    if not binary.is_file() or not os.access(binary, os.X_OK):
+        raise RuntimeError('candidate binary missing or not executable')
+    return Candidate(staging, tree, binary, static)
 
 
-def build_server():
+def build_server(*, output=None, cwd=None):
+    destination = Path(output) if output is not None else BIN
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    candidate = destination.with_suffix('.new')
+    guarded('build', ['go', 'build', '-trimpath', *HOSTING.get('server_build_args', []),
+                     '-o', str(candidate), HOSTING['server_package']], cwd=cwd or SERVER_DIR)
+    candidate.replace(destination)
+
+
+def install_candidate(candidate):
+    """Swap after successful validation and stop. Restore files if a swap fails."""
     BIN.parent.mkdir(parents=True, exist_ok=True)
-    candidate = BIN.with_suffix('.new')
-    guarded('build', ['go', 'build', '-trimpath', '-o', str(candidate), HOSTING['server_package']], cwd=SERVER_DIR)
-    candidate.replace(BIN)
+    STATIC_DIR.parent.mkdir(parents=True, exist_ok=True)
+    previous_bin = candidate.root / 'previous-binary'
+    previous_static = candidate.root / 'previous-static'
+    had_bin, had_static = BIN.exists(), STATIC_DIR.exists()
+    installed_bin = installed_static = False
+    try:
+        if had_bin:
+            BIN.replace(previous_bin)
+        if had_static:
+            STATIC_DIR.replace(previous_static)
+        candidate.binary.replace(BIN)
+        installed_bin = True
+        candidate.static.replace(STATIC_DIR)
+        installed_static = True
+    except BaseException:
+        if installed_static:
+            STATIC_DIR.replace(candidate.static)
+        if installed_bin:
+            BIN.replace(candidate.binary)
+        if previous_static.exists():
+            previous_static.replace(STATIC_DIR)
+        if previous_bin.exists():
+            previous_bin.replace(BIN)
+        raise
+
+
+def server_args(ports, site, static, data):
+    return [str(x).format(server_port=ports['server'], origin=site.origin,
+                          static_dir=static, data_dir=data) for x in HOSTING['server_args']]
+
+
+def check_candidate(candidate, site):
+    """Probe the new binary on an unused port with private disposable data."""
+    ports = allocate_ports({k: PROJECT['ports'][k] for k in ('server', 'dev')})
+    session = f'{NAME}-candidate'
+    data = candidate.root / 'check-data'
+    data.mkdir(exist_ok=True)
+    try:
+        tmuxnew(session, [str(candidate.binary), *server_args(ports, site, candidate.static, data)],
+                cwd=candidate.tree, env={'GOTOOLCHAIN': GO_TOOLCHAIN,
+                'BGD_STATIC_DIR': str(candidate.static), 'BGD_DATA_DIR': str(data)})
+        wait_health(ports['server'], HOSTING['health_path'])
+        if HOSTING.get('static', 'caddy') == 'embedded':
+            wait_health(ports['server'], '/')
+        run(['tmux', 'has-session', '-t', session])
+    finally:
+        run(['tmux', 'kill-session', '-t', session], check=False, capture=True)
 
 
 def wait_health(port, path, timeout=30):
@@ -240,10 +359,12 @@ def wait_health(port, path, timeout=30):
 def start_components(mode, site, ports):
     if not BIN.is_file():
         raise RuntimeError('run setup or redeploy to build the backend first')
-    server_args = [str(x).format(server_port=ports['server'], origin=site.origin)
-                   for x in HOSTING['server_args']]
+    data = STATE / 'data'
+    data.mkdir(exist_ok=True)
+    args = server_args(ports, site, STATIC_DIR, data)
     session = SESSIONS[0] if mode == 'prod' else SESSIONS[1]
-    tmuxnew(session, [str(BIN), *server_args], env={'GOTOOLCHAIN': GO_TOOLCHAIN})
+    tmuxnew(session, [str(BIN), *args], env={'GOTOOLCHAIN': GO_TOOLCHAIN,
+            'BGD_STATIC_DIR': str(STATIC_DIR), 'BGD_DATA_DIR': str(data)})
     wait_health(ports['server'], HOSTING['health_path'])
     if mode == 'dev':
         host = 'localhost' if platform.system() == 'Darwin' else '0.0.0.0'
@@ -286,17 +407,22 @@ def deploy(command, url=None):
             check_caddy_serves(address, CADDYFILE.read_bytes())
         except CaddyUnreachable:
             pass
-    stop_sessions()  # Both modes stop first, including setup and redeploy.
+    candidate = None
+    if command in ('setup', 'redeploy'):
+        candidate = build(install=True)
+        check_candidate(candidate, site)
+    # No stopping or live path mutation happens before the candidate passes.
+    stop_sessions()
+    if candidate is not None:
+        install_candidate(candidate)
+    elif mode == 'dev':
+        build_server()
     # tmux kill-session can return before listener teardown completes.
     preferred = previous.get('ports', {k: PROJECT['ports'][k] for k in ('server', 'dev')})
     until = time.monotonic() + 3
     while time.monotonic() < until and not all(port_free(int(v)) for v in preferred.values()):
         time.sleep(.1)
     ports = allocate_ports(preferred)
-    if command in ('setup', 'redeploy'):
-        build(install=True)
-    elif mode == 'dev':
-        build_server()
     if mode == 'prod' and not (STATIC_DIR / '200.html').is_file():
         raise RuntimeError('static build is missing; run setup')
     try:

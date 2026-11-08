@@ -1,5 +1,6 @@
 # Copy as Makefile. Adapt package scripts, generator/output path and cmd/server.
-# Preserve the lockfile and change this toolchain pin with self_host.py/go.mod.
+# Preserve the lockfile. This is the Go pin source read by self_host.py.
+# Keep server/go.mod compatible with the pinned toolchain.
 SHELL := /bin/sh
 .NOTPARALLEL:
 .DEFAULT_GOAL := verify-quick
@@ -45,7 +46,7 @@ lint:
 
 test-tools:
 	$(HEAVY) run --kind test -- python3 -m unittest
-	$(HEAVY) run --kind test -- node --test tools/chrome/cli.test.mjs tools/art/art.test.mjs
+	$(HEAVY) run --kind test -- node --test tools/chrome/*.test.mjs tools/art/art.test.mjs
 
 gen:
 	$(HEAVY) run --kind build -- go -C server generate ./...
