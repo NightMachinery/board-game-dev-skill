@@ -1,0 +1,32 @@
+{
+  "name": "my-game",
+  "run_dir_env": "BGD_RUN_DIR",
+  "run_dir": "~/.local/state/board-game-dev",
+  "kinds": [
+    "test",
+    "build",
+    "check",
+    "lint",
+    "browser",
+    "codex",
+    "install",
+    "fuzz",
+    "bench",
+    "light"
+  ],
+  "kind_locks": [
+    "browser",
+    "codex"
+  ],
+  "nice_kinds": [
+    "fuzz",
+    "bench"
+  ],
+  "ports": {
+    "server": 41731,
+    "dev": 41732,
+    "preview": 41733,
+    "e2e": 41734,
+    "chrome": 41739
+  }
+}

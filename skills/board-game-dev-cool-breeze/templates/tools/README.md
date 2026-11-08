@@ -1,0 +1,11 @@
+# Resource guard
+
+Copy `tools/` and `tests/test_heavy.py` to the project root. Edit `project.json` once: project name, private run directory (and its environment override), admitted kinds, exclusive kind locks and ports. All projects that share a machine-wide browser budget must use the same run directory. Keep `browser`, `codex` and `light` for these templates; `light` intentionally bypasses mode and memory gates. `BGD_PROJECT_CONFIG` selects an alternative JSON file.
+
+Use `python3 tools/heavy.py run --kind test --wait 3600 -- COMMAND`. Refusal is exit 75, including paused mode and an expired queue wait. Queue order is FIFO within priority. Only the coordinator grants high priority. Nested guarded commands reuse their parent's slot.
+
+`python3 tools/heavy.py mode nightshift --window 22:00-06:00`, `mode paused`, `mode continuous` and `status` manage run policy. Memory limits and browser floors use the documented `BGD_*` environment variables in `heavy.py`; Node and Go receive conservative process limits. Keep private logs and state outside the repository.
+
+For detached jobs: `HEAVY_NOTIFY=auto python3 tools/heavy.py run --kind test --wait 3600 -- COMMAND`. This needs Paseo and `PASEO_AGENT_ID`, or pass `--notify AGENT_ID`. It queues once, reports a log path and sends a completion message with keep-warm pings while waiting. A closed recipient falls back to its parent. Notifications are opt-in; do not export `HEAVY_NOTIFY` or put it inside Makefile recipes. A failure alert is saved when delivery fails. `PASEO_BIN` selects the CLI.
+
+Run standalone checks from the copied project root: `python3 -m unittest`. Tests use temporary run directories and tiny child processes; they do not stop other jobs. `stop-all` is an owner/coordinator operation and affects everything in the shared run directory.
