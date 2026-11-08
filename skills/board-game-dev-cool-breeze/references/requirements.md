@@ -36,11 +36,23 @@ record the answer.
   who is present is chosen again instead of a random player. Anyone a temporary moderator promotes
   is also temporary.
 - **Observers.** A moderator can move a player to the observers and back. A player moved to the
-  observers can rejoin by themselves. Observers are a real viewer role with their own redacted
-  view; watching never claims a seat or shows private offers.
+  observers can rejoin by themselves, into their own former seat while it is open or held by a bot
+  (never one another human holds). That lets a player undo a moderator's move of them, which is
+  accepted: the rejoin shows in the game log. Observers are a real viewer role with their own
+  redacted view; watching never claims a seat or shows private offers.
+- **Copying another player's link is public.** A link shows its holder that seat's private hand,
+  so a moderator copying someone else's link writes a game-log entry naming both.
 
 Recheck time-dependent authority when an action arrives, and fail closed while its durable state is
 uncertain.
+
+### Two-player games may simplify
+
+A two-player game is usually played by two friends who both stay for the whole game, so live
+moderation buys little. It may freeze its moderator set when the game starts (no promotion,
+demotion or temporary moderators during play, and no seat switches), keeping the roles above for
+the lobby before Start. The identity rules (tokens, device links, names) still apply in full. Record
+the choice as a decision.
 
 ## Phone first
 
@@ -48,6 +60,9 @@ uncertain.
   It is played at short heights too (a phone in landscape, split screen).
 - The board never scrolls horizontally, and the current required action and each player's
   essential status stay visible.
+- Below the smallest size the layout supports, a notice asks for a larger window or a rotation. A
+  tap dismisses it and shows the squeezed layout anyway, because a cramped layout can still be
+  useful (a split screen, a quick look).
 - Install-to-home-screen and fullscreen controls are offered where the browser supports them.
 
 ## Tooltips on everything
@@ -72,6 +87,11 @@ labels are translatable text. The project's own tooltip helper is used, never th
   "More in Rules" link that opens the rules at that section and closes the tooltip. Only the link
   takes the pointer; the bubble lets board clicks pass. Hover intent gives a moving pointer time
   to reach the link. On touch, the link is the one tap inside a tooltip that acts.
+- **Other controls in a tooltip.** A tooltip may hold other interactive elements when that helps
+  (a toggle, a "show on board" button, a link to a related card), at the agent's judgement. Each one
+  is an exception to the swallowed-tap rule in the same way as the rules link: it takes the pointer
+  and acts on touch, while the rest of the bubble stays inert. Keep them few, keep every one
+  translatable and reachable by keyboard, and record each kind as a decision.
 
 A lint test fails on any native `title=`. `templates/web/` has the helper. The custom, stacked
 tooltips are a must-have, not a polish item.
@@ -98,9 +118,14 @@ inheritance, never as an automatic light and dark pair. See [themes.md](themes.m
 - `self_host.py setup|redeploy|start|stop|dev-start|status`, documented in `docs/self-hosting.md`.
   The URL is supplied by the user and defaults to `https://<short-name>.<default domain>`, with the
   default host and domain read from the environment.
-- `setup` stops, sets up, then starts. `start`, `dev-start` and `redeploy` first stop both serving
-  modes. Every command that starts serving prints the final URL.
-- Caddy serves the static build itself; no extra static file server. An HTTPS site also gets an
+- `setup` and `redeploy` install, build and check first, while the old server keeps serving, then
+  stop both serving modes, then start the new build. A failed build never takes the site down, and
+  the downtime is only the swap. `start` and `dev-start` first stop both serving modes. Every
+  command that starts serving prints the final URL.
+- No extra static file server. Either Caddy serves the static build itself, or the game's own
+  server embeds the build so one binary is the whole release; the agent chooses by its own
+  judgement (Caddy serving is simpler to cache and needs no rebuild of the server for a client
+  change; an embedded build is one artifact to ship and roll back). An HTTPS site also gets an
   explicit HTTP-to-HTTPS redirect block; an HTTP site gets an HTTPS-to-HTTP redirect. The blocks
   live in `~/Caddyfile`.
 - `dev-start` points the Caddy block at the dev server with hot reload, and `start` points it back.

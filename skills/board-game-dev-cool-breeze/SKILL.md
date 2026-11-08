@@ -100,7 +100,8 @@ settled answers in the repository's decisions file.
   processes, no Docker.
 
 Seams: another backend language is fine when the owner asks, but any new backend service defaults
-to Go. Read [references/architecture.md](references/architecture.md) before designing the engine
+to Go. A two-player game may freeze its moderators at Start and skip live moderation during play
+([references/requirements.md](references/requirements.md), "Two-player games may simplify"). Read [references/architecture.md](references/architecture.md) before designing the engine
 and protocol, and [references/platform.md](references/platform.md) before rooms, identity and
 roles.
 
@@ -175,8 +176,9 @@ which skill was unavailable.
 
 Read [references/deployment.md](references/deployment.md) and adopt
 `templates/self_host.py`, which runs on the serving host. Defaults:
-`setup|redeploy|start|stop|dev-start|status`, Caddy serving the static build and proxying `/api`,
-`/ws` and `/health` to Go, blocks in `~/Caddyfile` with an explicit redirect between schemes, uncommon
+`setup|redeploy|start|stop|dev-start|status`, with `setup` and `redeploy` building before they
+stop the old server, no extra static file server (Caddy serves the build, or the Go server embeds
+it, by your judgement), blocks in `~/Caddyfile` with an explicit redirect between schemes, uncommon
 ports that are scanned and persisted, tmux sessions with `-e` for environment, proxy variables
 passed through when present but never hardcoded, everything self-hosted so the game runs on an
 intranet over plain HTTP, and a content hash in every changing asset URL.
