@@ -1,7 +1,7 @@
 // One tooltip store and Svelte 5 attachment. Mount TooltipLayer once.
 import { untrack, type Snippet } from 'svelte';
 import type { Attachment } from 'svelte/attachments';
-import { isQuietFocus, swallowClick } from './dismiss';
+import { isQuietFocus, restoreFocus, swallowClick } from './dismiss';
 import type { RuleSectionId } from '../rules/sections';
 import {
   downAction,
@@ -31,6 +31,9 @@ export interface TooltipContent {
   /** A small concept diagram under the text. Its labels must be
    *  translatable text, not baked into the SVG. */
   diagram?: Snippet;
+  /** Optional controls: use semantic buttons/links/inputs with
+   * data-tooltip-interactive on the control or its group. */
+  controls?: Snippet;
   /** A second joined panel; the layer shows at most two previews. */
   stack?: readonly TooltipStackItem[];
   /** The rules reference section this tooltip's topic belongs to: the
@@ -64,7 +67,7 @@ export const TOOLTIP_ID = 'game-tooltip';
 export const ANCHOR_ATTR = 'data-tooltip';
 /** The open bubble, and its "More in Rules" link. */
 const BUBBLE_SELECTOR = '[data-tooltip-layer] [data-tooltip-bubble]';
-const LINK_SELECTOR = '[data-tooltip-layer] [data-tooltip-rules]';
+const LINK_SELECTOR = '[data-tooltip-layer] [data-tooltip-bubble] [data-tooltip-interactive]';
 
 function inside(target: EventTarget | null, selector: string): boolean {
   return target instanceof Element && target.closest(selector) !== null;
@@ -243,7 +246,7 @@ export function installTooltipGestures(store: TooltipStore = tooltips): () => vo
 
   const onOver = (e: PointerEvent): void => {
     if (e.pointerType !== 'mouse') return;
-    // Only the link keeps its bubble open. The rest of the bubble lets
+    // Marked interactive controls keep their bubble open. The rest of the bubble lets
     // the pointer reach neighboring anchors.
     if (store.active && inside(e.target, LINK_SELECTOR)) {
       hovered = null;
@@ -251,14 +254,14 @@ export function installTooltipGestures(store: TooltipStore = tooltips): () => vo
       return;
     }
     const anchor = store.anchorFor(e.target);
-    // The link is not an anchor. Leaving it must still arm the hide
+    // A bubble control is not an anchor. Leaving it must still arm the hide
     // timer when both the old and new hovered anchors are null.
     if (anchor === hovered && !inside(e.relatedTarget, LINK_SELECTOR)) return;
     hovered = anchor;
     clearHover();
     if (!anchor) {
       if (store.active?.via === 'hover') {
-        const delay = store.active.content.rulesId ? HOVER_HIDE_LINK_MS : HOVER_HIDE_MS;
+        const delay = (store.active.content.rulesId || store.active.content.controls) ? HOVER_HIDE_LINK_MS : HOVER_HIDE_MS;
         hideTimer = setTimeout(() => store.hide(), delay);
       }
       return;
@@ -266,7 +269,7 @@ export function installTooltipGestures(store: TooltipStore = tooltips): () => vo
     if (clickedAt) return;
     if (
       store.active?.via === 'hover' &&
-      store.active.content.rulesId &&
+      (store.active.content.rulesId || store.active.content.controls) &&
       anchor !== store.active.anchor
     ) {
       // Linked tooltips need a short hover intent delay even across the
@@ -298,7 +301,8 @@ export function installTooltipGestures(store: TooltipStore = tooltips): () => vo
       mouse,
       open: store.active !== null,
       inBubble: inside(e.target, BUBBLE_SELECTOR),
-      onLink: inside(e.target, LINK_SELECTOR)
+      onLink: false,
+      onInteractive: inside(e.target, LINK_SELECTOR)
     });
     if (mouse) clickedAt = { x: e.clientX, y: e.clientY };
     // A press inside the bubble (its link) leaves it open; the link's click
@@ -352,7 +356,7 @@ export function installTooltipGestures(store: TooltipStore = tooltips): () => vo
       } else if (
         hideTimer !== undefined &&
         store.active?.via === 'hover' &&
-        store.active.content.rulesId
+        (store.active.content.rulesId || store.active.content.controls)
       ) {
         clearTimeout(hideTimer);
         hideTimer = setTimeout(() => store.hide(), HOVER_HIDE_LINK_MS);
@@ -395,6 +399,24 @@ export function installTooltipGestures(store: TooltipStore = tooltips): () => vo
   };
 
   const onKey = (e: KeyboardEvent): void => {
+    // Give keyboard users a direct route from the anchor into marked controls,
+    // without trapping them or losing the bubble on focusout.
+    if (e.key === 'Tab' && store.active) {
+      const owner = store.active.focusOwner ?? store.active.anchor;
+      const controls = [...document.querySelectorAll<HTMLElement>(LINK_SELECTOR)]
+        .flatMap((el) => el.matches(FOCUSABLE) ? [el] : [...el.querySelectorAll<HTMLElement>(FOCUSABLE)])
+        .filter((el) => !el.matches(':disabled') && el.getClientRects().length > 0);
+      if (document.activeElement === owner && !e.shiftKey && controls[0]) {
+        e.preventDefault(); clearHover(); controls[0].focus(); return;
+      }
+      const at = controls.indexOf(document.activeElement as HTMLElement);
+      if (at >= 0 && ((e.shiftKey && at === 0) || (!e.shiftKey && at === controls.length - 1))) {
+        store.hide();
+        if (owner instanceof HTMLElement) restoreFocus(owner);
+        if (e.shiftKey) e.preventDefault();
+        return;
+      }
+    }
     // A new keyboard gesture is deliberate focus, even if it arrives
     // before the native dialog's zero-delay cleanup timer.
     if (e.key !== 'Escape') {
@@ -412,6 +434,7 @@ export function installTooltipGestures(store: TooltipStore = tooltips): () => vo
   const onFocusIn = (e: FocusEvent): void => {
     const el = e.target;
     if (!(el instanceof Element)) return;
+    if (inside(el, LINK_SELECTOR)) { clearHover(); return; }
     // The focus given back to an opener (ui/dismiss.ts) opens no tooltip.
     if (isQuietFocus(el) || (closingDialog && !closingDialog.contains(el))) {
       if (store.active?.via === 'focus') store.hide();
@@ -428,9 +451,10 @@ export function installTooltipGestures(store: TooltipStore = tooltips): () => vo
   };
 
   const onFocusOut = (e: FocusEvent): void => {
+    if (inside(e.relatedTarget, LINK_SELECTOR)) return;
     if (
-      store.active?.via === 'focus' &&
-      (store.active.focusOwner ?? store.active.anchor) === e.target
+      store.active && (inside(e.target, LINK_SELECTOR) ||
+      (store.active.via === 'focus' && (store.active.focusOwner ?? store.active.anchor) === e.target))
     )
       store.hide();
   };

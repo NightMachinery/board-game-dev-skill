@@ -7,7 +7,7 @@
 // element with no action. An actionable element keeps its tap action and
 // shows its tooltip on a long-press, whose release never triggers the
 // action. Any tap while a tooltip is open closes it and is swallowed, except
-// a tap on the bubble's "More in Rules" link, which acts (downAction).
+// a tap on the rules link or a marked interactive bubble control, which acts.
 
 /** How long a finger must rest for a long-press. Long enough that an
  *  ordinary tap (about 100 to 250 ms) never reaches it, short enough not to
@@ -161,7 +161,7 @@ export type DownAction =
 
 /**
  * The pointerdown rule. `inBubble` is a press inside the open bubble, and
- * `onLink` one on its "More in Rules" link: the one tap that is not
+ * `onLink` or `onInteractive` marks a control: its tap is not
  * swallowed, so the link works under the touch model too.
  */
 export function downAction(p: {
@@ -169,8 +169,10 @@ export function downAction(p: {
   open: boolean;
   inBubble: boolean;
   onLink: boolean;
+  /** A marked optional bubble control, with the same touch exception. */
+  onInteractive?: boolean;
 }): DownAction {
   if (p.mouse) return p.open && !p.inBubble ? 'hide' : 'keep';
   if (!p.open) return 'press';
-  return p.onLink ? 'keep' : 'swallow';
+  return p.onLink || p.onInteractive ? 'keep' : 'swallow';
 }

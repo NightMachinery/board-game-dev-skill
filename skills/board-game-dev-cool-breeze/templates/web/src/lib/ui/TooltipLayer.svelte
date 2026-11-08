@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Mount once. Only the rules link takes the pointer; previews are read-only.
+  // Mount once. Marked bubble controls take the pointer; previews are read-only.
   import { tooltips, installTooltipGestures, TOOLTIP_ID } from './tooltip.svelte';
   import { placeTooltip } from './tooltip-place';
   import { openRules } from '../rules/rules-overlay.svelte';
@@ -69,8 +69,9 @@
           <span>{active.content.text}</span>
           {#each active.content.lines ?? [] as line}<span>{line}</span>{/each}
           {#if active.content.diagram}{@render active.content.diagram()}{/if}
+          {#if active.content.controls}{@render active.content.controls()}{/if}
           {#if active.content.rulesId}
-            <button type="button" data-tooltip-rules onclick={() => {
+            <button type="button" data-tooltip-rules data-tooltip-interactive onclick={() => {
               const id = active?.content.rulesId; tooltips.hide(); if (id) onrules(id);
             }}>{rulesLabel}</button>
           {/if}
@@ -98,7 +99,9 @@
   figcaption { margin-block-end: .3rem; text-align: center; }
   [data-tooltip-connector] { background: var(--tooltip-rule, currentColor); }
   .tooltip-group:not(:global([data-placed])) { visibility: hidden; }
-  .tooltip-group :global(*:not([data-tooltip-rules])) { pointer-events: none !important; }
-  [data-tooltip-rules] { pointer-events: auto; min-block-size: 2.75rem; }
+  .tooltip-group :global(*) { pointer-events: none !important; }
+  .tooltip-group :global([data-tooltip-bubble] [data-tooltip-interactive]),
+  .tooltip-group :global([data-tooltip-bubble] [data-tooltip-interactive] *) { pointer-events: auto !important; }
+  [data-tooltip-rules] { min-block-size: 2.75rem; }
   :global([data-tooltip]) { -webkit-touch-callout: none; user-select: none; }
 </style>

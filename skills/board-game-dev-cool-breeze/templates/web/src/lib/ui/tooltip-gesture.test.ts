@@ -126,3 +126,9 @@ describe('downAction (the "More in Rules" link exception)', () => {
     expect(at(false, true, true, true)).toBe('keep');
   });
 });
+
+// Bubble controls opt into the same touch exception as the built-in rules link.
+it('a marked extra control keeps touch/keyboard activation available', () => {
+  expect(downAction({ mouse: false, open: true, inBubble: true, onLink: false, onInteractive: true })).toBe('keep');
+  expect(downAction({ mouse: false, open: true, inBubble: true, onLink: false })).toBe('swallow');
+});

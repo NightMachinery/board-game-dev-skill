@@ -12,15 +12,13 @@ The helper owns one tooltip, picks the innermost registered element, delays
 fine-pointer hover, shows keyboard focus, and closes on Escape. Touch taps
 show passive elements' tips. Actionable elements retain tap actions and use
 long-press for tips; release after a long-press never acts. A tap closing an
-open tip is swallowed, including the generated click. Only the optional
-rules link acts inside the bubble. Tooltips are manual popovers so they can
+open tip is swallowed, including the generated click. Marked interactive controls act inside the bubble. Tooltips are manual popovers so they can
 appear above modal dialogs. Keep the gesture cleanup returned by the layer.
 `stack: [{caption, render}]` adds caller-rendered real previews in a joined
 second panel, at most two. It sits beside on wide screens and on the bubble's
 far side on phones. No nested stack is possible: anchors inside the tooltip
-layer never register as targets. Keep previews noninteractive; only the rules
-link receives the pointer, with hover intent to cross to it and a touch exception
-that lets the link act. `tooltip-place` contains tested viewport placement; set tooltip CSS variables
+layer never register as targets. Keep previews noninteractive. The rules link and chosen bubble controls receive
+the pointer, with hover intent and a touch exception that lets them act. `tooltip-place` contains tested viewport placement; set tooltip CSS variables
 from the chosen theme. Add safe-area padding for edge-to-edge device shells.
 
 `session/socket-url.ts` derives ws/wss from `location`; use it when constructing
@@ -59,3 +57,11 @@ and overlay share `RulesContent`, diagrams and stable `sections.ts` ids. Fill
 all translation keys with the complete rules in your own words before release;
 the skeleton has no game rules of its own. Link `/rules` from Home, and the
 overlay from the game menu. Keep released ids stable for tooltip/deep links.
+
+Optional `controls` is a caller-rendered snippet. Mark its semantic buttons,
+links, inputs or a group with `data-tooltip-interactive`. Marked elements take
+the pointer and retain touch activation instead of closing/swallowing the tip.
+Use accessible names and native keyboard semantics. Tab from the anchor enters
+the first control; Shift-Tab returns, and Tab after the last control continues
+through the page. Escape still closes the tooltip. Extra controls are an agent
+design choice, not a reason to turn preview stacks into nested interactions.
