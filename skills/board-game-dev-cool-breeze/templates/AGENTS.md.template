@@ -46,15 +46,16 @@ test builds and independent ports. When developing on a local machine use
 Use real load-bearing binaries (`command ...` in shell code). Quote literal
 paths and patterns. On macOS assume BSD userland unless calling GNU tools by
 their g-prefixed name. Read `CODEX_BIN` rather than invoking a shell wrapper.
-Pin the Go toolchain in the Makefile and hosting script. Pass optional proxy
+Pin the Go toolchain in the Makefile; the hosting script reads that exported pin. Pass optional proxy
 environment variables through; never require or hardcode a proxy.
 
 ## Engine and room contracts
 
 Keep the engine deterministic and replayable. No I/O, clocks, concurrency,
-logging or global randomness. Explicit seeded entropy enters at the engine
-boundary. Prefer integer rules arithmetic and enum-indexed arrays; no unordered
-map iteration may affect actions, state, events or output. Clone independently.
+logging or global randomness. Rules use integers only and no maps in rules logic;
+use enum-indexed arrays. Draw all chance at game creation from the seed. If the
+game needs later chance, record the entropy stream or outcomes for replay and
+state that exception as an explicit decision. Clone independently.
 [State the exact package import allow-list and enforce it with a test/linter.]
 
 The server validates an action key by membership in the current engine legal
@@ -62,7 +63,10 @@ list and applies that engine-owned action. Never construct rules actions from
 client payloads. Per-viewer views omit every hidden fact the viewer cannot
 know, including spectators and logs. Distinguish public facts, private player
 knowledge and server-only state. Test adversarial viewers and stale/replayed
-requests. Room actors serialize state changes. Persist rules/preset versions
+requests. For a two-player game, the moderator set may freeze at Start: no promotions,
+demotions, temporary moderators or seat switches during play; normal lobby
+roles still apply before Start. Identity/device-link rules remain in full.
+Record this simplification as an explicit decision. Room actors serialize state changes. Persist rules/preset versions
 and deterministic entropy. Ignore late worker results after undo/restore.
 
 Wire fields use explicit JSON names, empty arrays rather than null, and typed
@@ -78,6 +82,8 @@ Keep leaf components usable in a standalone gallery. Use stable `data-act`
 action keys and semantic fixture anchors for browser tests.
 
 Phone-first layouts, no horizontal board scroll, logical CSS for direction.
+Below the supported minimum size, show a notice asking for a larger window or
+rotation. A tap dismisses it and exposes the squeezed layout anyway.
 Translate all user-visible text and accessible names. User names use `dir="auto"`.
 State must remain legible when animation is disabled. Launch with one deliberate
 theme chosen with the owner. One selected theme pack controls all colours and
@@ -98,8 +104,9 @@ Linked previews are required: a tooltip may carry at most two caller-rendered
 real-component previews in a joined second panel, beside on wide screens and
 on the bubble's far side on phones. No nested stack. An optional stable
 `rulesId` shows a translated More in Rules link, closes the tip and opens that
-rules section. Only the link takes the pointer; preserve hover intent and its
-touch-tap exception. The complete rules reference is also required: a live-board
+rules section. The rules link and deliberately marked `data-tooltip-interactive` bubble
+controls take the pointer; preserve hover intent, keyboard access and their
+touch-tap exception. Other bubble content lets board clicks pass. The complete rules reference is also required: a live-board
 desktop side drawer, tall phone bottom sheet, and `/rules` page sharing the same
 translated sections, stable ids and real component diagrams. Home links the
 page and the game menu opens the overlay. Replace skeleton rule text before
@@ -133,10 +140,13 @@ immediately before committing, commit with explicit pathspecs, then inspect
 Do not rewrite published history. A worker does not push unless its brief
 assigns that duty. Report signing failures and use unsigned commits if needed.
 
-After finishing and committing, run `python3 self_host.py redeploy` inside tmux
-session `<repo-name>-setup`, wait 120 seconds, then read its logs. A worker in an
-isolated worktree reports deployment needs to the coordinator instead of
-deploying that worktree. Never claim a serving URL until startup checks pass.
+After finishing and committing, update the local/dev instance inside tmux
+session `<repo-name>-setup`, wait 120 seconds, then read its logs: `dev-start`
+for local development, `redeploy` for a local built instance. Production
+redeployment requires deployment authority explicitly granted by the owner;
+the post-commit rule grants none. Check the remembered URL before updating.
+An isolated worker reports deployment needs to the coordinator. Never claim a
+serving URL until startup checks pass.
 
 Runs unattended: the brief settles routine design questions within its scope.
 Read the private learnings index and recovery note first. Check whether the
