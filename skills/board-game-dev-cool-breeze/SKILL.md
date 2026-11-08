@@ -174,8 +174,9 @@ which skill was unavailable.
 ## Deployment
 
 Read [references/deployment.md](references/deployment.md) and adopt
-`templates/self_host.py`. Defaults: `setup|redeploy|start|stop|dev-start|status` (plus `ship` to a
-remote host), Caddy blocks in `~/Caddyfile` with an explicit redirect between schemes, uncommon
+`templates/self_host.py`, which runs on the serving host. Defaults:
+`setup|redeploy|start|stop|dev-start|status`, Caddy serving the static build and proxying `/api`,
+`/ws` and `/health` to Go, blocks in `~/Caddyfile` with an explicit redirect between schemes, uncommon
 ports that are scanned and persisted, tmux sessions with `-e` for environment, proxy variables
 passed through when present but never hardcoded, everything self-hosted so the game runs on an
 intranet over plain HTTP, and a content hash in every changing asset URL.

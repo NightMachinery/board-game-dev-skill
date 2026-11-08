@@ -1,8 +1,10 @@
 # Deployment and self-hosting
 
 `templates/self_host.py` implements the owner's hosting contract ([requirements.md](requirements.md),
-"Self-hosting and intranet use"). Build on the development machine, ship one artifact, check it,
-and keep a rollback.
+"Self-hosting and intranet use") on the serving host itself. Once production runs on a small or
+shared host, add a `ship` step: build once on the development machine from a fixed commit, copy that
+one artifact to each host in turn, check it, and keep a rollback. The template leaves `ship` out
+because it needs private target details, which belong in gitignored config.
 
 A redeploy, in order: build once from a fixed commit; run a read-only compatibility scan of stored
 rooms against the candidate; stop the writer; scan again; back up room data; swap the binary and
