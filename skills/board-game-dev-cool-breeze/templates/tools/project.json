@@ -62,5 +62,16 @@
         ]
       }
     }
+  },
+  "hosting": {
+    "server_package": "./cmd/server",
+    "server_args": [
+      "--addr",
+      "127.0.0.1:{server_port}"
+    ],
+    "health_path": "/health",
+    "web_dir": "web",
+    "server_dir": "server",
+    "static_dir": "web/build"
   }
 }
