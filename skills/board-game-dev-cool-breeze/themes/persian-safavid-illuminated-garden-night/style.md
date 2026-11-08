@@ -24,6 +24,20 @@ proposals until that art exists and the contrast pairs are checked again.
   that fades to paper. Tokens keep their own flat accent ground inside the rim; only the paper
   margin around the rim changes.
 
+## Kind templates
+
+The parent's kinds with the night ground. A token keeps its flat accent ground inside the rim; only the paper around it changes.
+
+- **card**: "{subject}. Landscape vignette, subject centred, dominant accent {accent}. Keep every figure and object inside the central area; leave a wide margin of plain deep lapis night paper on all four sides, widest at left and right. One or two large figures doing the named activity, filling the central third; no crowds, no distant skyline, no filler animals unless the subject names them. No building in the background unless the subject names one. Soft vignette fading to the night paper colour at the edges."
+- **board**: "Panoramic view of {subject} as monumental architecture in the Persian-miniature idiom, landscape, dominant accent {accent}. The monument centred and whole, occupying the middle third, not cut by the frame. Soft vignette fading to the night paper colour at the edges." (a large location or monument)
+- **token**: "Circular medallion centred on a square of plain deep lapis night paper, filling the square except for a narrow, even margin of paper (about 4 percent of the width) on every side; the paper outside the rim is flat and clean, with no vignette, fade, shadow or ornament. Inside: a flat {accent} ground, one bold symmetric emblem of {subject} filling the central 60 percent, a thin crisp bright gold rim only; no landscape, trees, rocks, ground or clouds inside the medallion; no ornamental border band."
+- **back**: "Symmetric ornamental illumination (tazhib, girih strapwork), portrait orientation, no figures: {subject}. Soft vignette fading to the night paper colour at the edges."
+- **texture**: "Seamless fine deep lapis paper grain with faint lighter fibres, {subject}, no figures, no objects, suitable for tiling."
+- **hero**: "Wide panoramic scene: {subject}, landscape, moonlight with small warm lamps, dominant accent {accent}. Soft vignette fading to the night paper colour at the edges."
+- **avatar**: "Portrait bust, shoulders up, one figure, centred: {subject}. Dominant accent {accent}, plain deep lapis background, no scenery. Soft vignette fading to the night paper colour at the edges."
+- **victory**: "Wide celebratory scene: {subject}, landscape, dominant accent {accent}. Soft vignette fading to the night paper colour at the edges."
+- **icon**: "Simple bold emblem on a plain deep lapis ground, readable at 32 pixels: {subject}. Dominant accent {accent}, no scenery, no background detail. Soft vignette fading to the night paper colour at the edges." (the app icon)
+
 ## Style prefix (verbatim)
 
 > Original illustration in the manner of a 16th-century Persian miniature painting (Safavid
