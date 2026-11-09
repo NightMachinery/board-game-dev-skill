@@ -45,7 +45,10 @@ artifact paths, open issues); how to notify the coordinator. Templates are in `t
 
 **Integration**: rebase the branch onto the mainline; scan its added lines for private information;
 confirm it touched no single-writer file; run the acceptance gate on the rebased tree;
-fast-forward; push; remove the worktree; watch CI.
+fast-forward; push; remove the worktree, then archive the worker's agent and its workspace in the
+agent host (in Paseo, `paseo archive AGENT` and `paseo workspace archive WORKSPACE`); watch CI.
+Archiving the agent alone leaves its workspace in the sidebar, and once the worktree folder is gone
+nothing else removes it, so every retired worker piles up there as unread clutter.
 
 ## Lessons
 
