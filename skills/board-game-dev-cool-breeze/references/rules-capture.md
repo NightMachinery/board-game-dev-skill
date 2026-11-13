@@ -9,6 +9,21 @@ sources list (what was consulted and what was not available), the data tables, a
 the evidence and what remains uncertain. Downloaded rulebooks and photos stay out of the
 repository.
 
+## Catalogues at scale
+
+When a game has many cards, scenarios or destinations, verify them in groups by the mechanics
+they use, not one by one. One shared automated check loads every entry, checks ranges, supplies,
+references and module dependencies, sets each entry up in every mode at a few seeds and runs
+seeded playouts. Two-reader extraction is spent on fields that are missing, conflicting or
+unreadable, and a component shared by a group is read once for the whole group. Every entry
+still keeps its exact source provenance in the private ledger and its pinned content in the
+repository; a group shares checks, not evidence. Independent review and browser acceptance go to
+one representative per group and to unusual interactions, not to every routine entry. Admit each
+group in one commit with its pins.
+
+The automated check proves consistency, not transcription: a misread value that is still in range
+passes it. The source comparison and source-derived pins remain the guard against that.
+
 ## Lessons
 
 Each lesson is a rule and its reason. The label says how strong the evidence was: *seen once* (one concrete finding), *seen repeatedly* (recurring failures or independent checks across subsystems), or *owner decision* (an accepted preference, which a new owner may change).
@@ -36,3 +51,5 @@ Each lesson is a rule and its reason. The label says how strong the evidence was
 - **3.11** Check complex payment or allocation solvers against a small independent exhaustive oracle. Optimized code and tests using the same helper can share the same mistake. *(seen repeatedly)*
 
 - **3.12** Require a ruling before changing reference fixtures, then add a narrow pin for the resolved mistake. Blindly regenerating expected data turns the verification gate into a snapshot of whichever implementation ran last. *(seen repeatedly)*
+
+- **3.13** Verify a large catalogue in mechanic groups with one shared automated check, keeping exact per-entry provenance and pins, and give separate review and browser runs only to representatives and unusual interactions. Per-entry review and runtime acceptance of routine cards cost hours each; after switching to groups, one group of nineteen and then the remaining forty-one entries were admitted within a day. *(seen once)*

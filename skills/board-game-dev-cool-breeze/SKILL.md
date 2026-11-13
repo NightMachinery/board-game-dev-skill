@@ -126,7 +126,8 @@ theme, not by order.
 
 - **Rules capture** ([references/rules-capture.md](references/rules-capture.md)): a complete rules
   reference in your own words, independent data tables reconciled field by field, and a rulings
-  file for every disagreement, before the first rules slice.
+  file for every disagreement, before the first rules slice. A large catalogue of cards or
+  scenarios is verified in groups by the mechanics it uses, with one shared automated check.
 - **Engine** (tests first, one rule area per slice), then **rooms and the platform** (identity,
   lobby, roles, spectators, reconnect, rematch), then the **client** on a phone
   ([references/phone-ui.md](references/phone-ui.md)).
