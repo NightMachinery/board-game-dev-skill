@@ -106,7 +106,10 @@ adoption order. In short:
 - **Client: SvelteKit with Svelte 5 runes and Tailwind**, mobile-first. It renders views and sends
   action keys; it never computes legality or cost. Wire types are generated from the server's DTOs.
 - **Storage**: the seed, options and keys, written durably before a move is acknowledged, with
-  versioned records.
+  versioned records. Keeping old games playable across a format change is optional by default:
+  most stored games go stale, so a change may bump the version and refuse older games instead of
+  carrying parallel formats. Their bytes are kept, never deleted or rewritten, unless the owner
+  has said that data is disposable; see [references/architecture.md](references/architecture.md).
 - **Hosting**: one Go binary that embeds or sits behind the static build, Caddy in front, tmux for
   processes, no Docker.
 

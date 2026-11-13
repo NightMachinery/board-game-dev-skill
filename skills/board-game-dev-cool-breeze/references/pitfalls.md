@@ -25,7 +25,7 @@ Each lesson is a rule and its reason. The label says how strong the evidence was
 
 - **12.09** Recreated sessions reset request counters while keeping the old client identifier, and retries could target a different seat. Prevent recurrence by aligning identifier lifetimes and binding pending intent to its original viewer and seat. *(seen once)*
 
-- **12.10** Stricter security limits and hashed client keys broke valid old records or forgot sequence barriers. Prevent recurrence with explicit format migrations tested against records written by the earlier version, including values above new defaults. *(seen repeatedly)*
+- **12.10** Stricter security limits and hashed client keys broke valid old records or forgot sequence barriers. Prevent recurrence by deciding per change whether old records stay playable (architecture 2.26): when they do, test the migration against records written by the earlier version, including values above new defaults; when they do not, refuse them cleanly and leave their bytes untouched. *(seen repeatedly)*
 
 - **12.11** Store size checks covered ordinary writes but missed load-time hash and archive rewrites. Prevent recurrence by enforcing the write/read cap at the final shared write boundary and testing every rewriting path. *(seen once)*
 

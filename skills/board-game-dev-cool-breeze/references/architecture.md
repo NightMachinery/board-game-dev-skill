@@ -73,3 +73,5 @@ Each lesson is a rule and its reason. The label says how strong the evidence was
 - **2.24** Share proven infrastructure between games while keeping rules, catalogs, actors and frame families separate where their semantics differ. Similar terminology is insufficient evidence that two engines should share behavior. *(seen repeatedly)*
 
 - **2.25** Bound transport input, queues and slow-client output without blocking the actor. A latest-snapshot outbox is useful only if its event and history semantics still preserve everything the player needs to understand progress. *(seen repeatedly)*
+
+- **2.26** Treat keeping old games playable across a format change as optional unless the owner asks for it, and treat keeping their bytes as required. Most stored games in a casual self-hosted game go stale, while parallel record formats kept only for compatibility multiplied tests and reviews. A change may bump the version and refuse older games, leaving them untouched; deleting, archiving or rewriting them needs the owner's word that the data is disposable. *(owner decision)*
