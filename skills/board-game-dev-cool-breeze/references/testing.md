@@ -30,6 +30,15 @@ adds one representative case or a gallery case, not a new script. Acceptance run
 and the production smoke use this driver and add only their own observations. The run directory
 holds their evidence, never the only copy of the code that produced it.
 
+## Where acceptance evidence lives
+
+`docs/testing.md` says how to run each check and what it proves. Acceptance evidence goes in one
+public file, `docs/dev/acceptance.md`: one entry per area, updated in place, saying what was
+checked (sizes, modes, counts, the kind of review), what passed and what was not covered. Change
+it in the same commit as the behavior where possible, not in a separate commit that only records
+acceptance. Screenshots, traces, private test identities and machine details stay in the run
+directory.
+
 ## Timed playthroughs
 
 Separate three questions, because one attempt rarely answers all of them:
@@ -107,3 +116,5 @@ Each lesson is a rule and its reason. The label says how strong the evidence was
 - **6.25** Commit the driver that plays full games, and run one short game per mode in CI on every push. Acceptance runs written as private per-run scripts failed several times on harness defects (a cancelling key press, a privacy mask that hid the page, a timeout) rather than on the product, while the committed suite never played a game. *(seen repeatedly)*
 
 - **6.26** For a real deadline, measure the action budget against the agent's decision and tool latency before playing, and let the driver execute a per-round plan when click-by-click play does not fit. Timed attempts in which the agent reasoned between clicks lost on the clock before the first move landed. *(seen once)*
+
+- **6.27** Keep `docs/testing.md` a guide to running checks and keep acceptance evidence in one public file updated in place. Recording each acceptance as its own docs commit made about one commit in seven a docs-only record and turned the testing guide into a long, stale-prone log. *(owner decision)*

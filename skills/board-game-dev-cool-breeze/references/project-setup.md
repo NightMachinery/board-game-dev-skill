@@ -7,8 +7,8 @@ Day-one checklist:
 
 - `AGENTS.md` from `templates/AGENTS.md.template`, read fully by every worker.
 - A short README (what the game is, how to try it) linking to `docs/README.md`, an index of the
-  focused guides: architecture, protocol, rules, testing, self-hosting, art, legal, decisions,
-  roadmap.
+  focused guides: architecture, protocol, rules, testing, acceptance evidence, self-hosting, art,
+  legal, decisions, roadmap.
 - A decisions file with numbered entries; later decisions name what they supersede.
 - The run directory outside the repository, with `AUTHORITY.md` listing the owner's standing
   grants and refusals ([orchestration.md](orchestration.md)), and the task checklist gitignored.

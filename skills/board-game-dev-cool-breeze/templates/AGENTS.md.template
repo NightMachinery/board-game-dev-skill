@@ -131,9 +131,12 @@ stay private. Use the per-theme index with content-hashed URLs; missing art is
 a procedural placeholder. No copied official art, logos or frame designs.
 Keep painting quality rules in the theme's style file. Self-host licensed fonts.
 
-Update docs with changed behavior and decisions. Keep README short: value,
-quick start and links to details. No tables in prose docs. Record provenance
-and asset licences. Keep private state, run logs, generated review sheets,
+Update docs in the same commit as the behavior they describe. Keep README
+short: value, quick start and links to details. `docs/testing.md` says how to
+run each check and what it proves; acceptance evidence goes in the one file
+`docs/dev/acceptance.md`, updated in place, never as a separate commit that only
+records acceptance. No tables in prose docs. Record provenance and asset
+licences. Keep private state, run logs, generated review sheets,
 service targets, credentials, hostnames and personal data out of public commits.
 
 ## Commits, deployment and unattended work

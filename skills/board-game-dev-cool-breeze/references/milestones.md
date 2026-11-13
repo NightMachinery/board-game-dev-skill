@@ -3,6 +3,9 @@
 A sequence that worked for a first game, with each milestone's usual slices and its acceptance.
 Each milestone ends green (its acceptance passes), committed and pushed. The roadmap file in the
 repository changes only when a milestone ends; day-to-day progress lives in the run directory.
+Other public docs follow the same rule: they describe current behavior and how to check it, and
+acceptance evidence goes in its one file ([testing.md](testing.md), "Where acceptance evidence
+lives").
 
 Standing gates for every milestone: the quick verification target is green, no headless browser is
 left running, and the docs describe what was built.
