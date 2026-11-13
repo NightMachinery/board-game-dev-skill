@@ -50,6 +50,26 @@ agent host (in Paseo, `paseo archive AGENT` and `paseo workspace archive WORKSPA
 Archiving the agent alone leaves its workspace in the sidebar, and once the worktree folder is gone
 nothing else removes it, so every retired worker piles up there as unread clutter.
 
+## Blocked work and incidents
+
+A blocker has a scope: the action it prevents, the evidence for that dependency, who can resolve
+it, and the work that remains authorized. Record these in the private state. Preserve the owner's
+existing approvals; a new question does not revoke them. Prepare a concrete, reviewable result
+before requesting missing authority. Present the full question, options, tradeoffs and recommendation
+in one place so the owner does not have to reconstruct earlier messages.
+
+For a security incident, stop the active exposure path, preserve evidence without copying secrets,
+and determine the affected processes, accounts and data. Ask before changing credentials or
+services outside the existing authority. Pause related work until its containment is understood,
+but do not infer a project-wide stop when unrelated development can proceed safely. Never treat
+silence as approval or weaken permissions to escape a blocker.
+
+Before yielding with no active job, check the current backlog once. Continue the highest-priority
+independent task, prepare an inert implementation or proposal for the blocked task, or report that
+all remaining tasks depend on named external decisions. Use completion events for real waits.
+At recovery, reconcile named jobs/results once and act on new evidence; do not relaunch completed
+work, repeat unchanged checks, or send successive unchanged status reports while useful work exists.
+
 ## Lessons
 
 Each lesson is a rule and its reason. The label says how strong the evidence was: *seen once* (one concrete finding), *seen repeatedly* (recurring failures or independent checks across subsystems), or *owner decision* (an accepted preference, which a new owner may change).

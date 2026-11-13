@@ -36,6 +36,11 @@ and on process exit. Never drive the owner's everyday browser or attach its
 profile. Use `tools/chrome/` for screenshots and DOM probes. Do not trust a
 successful bounds probe as evidence that a screen looks good: inspect images.
 
+Start interactive test sessions and disposable services with an explicit minimal
+environment allowlist and only the test credentials they need. Never print or
+return an environment, runtime config or credential-bearing object in a REPL;
+suppress expression return values when constructing such objects.
+
 Stop only your own processes, by verified PID. Never broad-match a process
 name, `pgrep -f` variable or `killall`. Killing a parent may leave children;
 check the owned profile/port after cleanup. Preserve owner-managed tmux servers.
@@ -147,6 +152,13 @@ redeployment requires deployment authority explicitly granted by the owner;
 the post-commit rule grants none. Check the remembered URL before updating.
 An isolated worker reports deployment needs to the coordinator. Never claim a
 serving URL until startup checks pass.
+
+A pending permission or policy question blocks only actions that depend on it.
+Contain an incident's active exposure first, preserve evidence without copying
+secrets, then continue independent authorized work. Do not rotate unrelated
+credentials without authority. Before reporting idle, select an unblocked task
+or name the external dependency for every remaining task. Existing approvals
+persist within their scope; do not repeat settled votes or unchanged checks.
 
 Runs unattended: the brief settles routine design questions within its scope.
 Read the private learnings index and recovery note first. Check whether the

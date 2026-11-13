@@ -9,6 +9,16 @@ invariants after every transition; fuzzing of legal play and malformed input; ac
 client unit tests; Playwright games driven by offered keys through real controls; the screenshot
 matrix and probes; a production smoke suite.
 
+## Timed playthroughs
+
+Prove the player's control path before starting a real deadline: selectors, action confirmation,
+private-choice order and measured decision/tool latency must fit the round budget. Practise on
+an untimed mode or a clearly labelled fixture; keep the accepted timed game on its real clock.
+A script or agent that spends the window debugging controls has not tested strategic playability.
+Record that coverage gap honestly, repair the driver outside the live attempt, and choose a
+bounded next test or a human playthrough instead of an indefinite series of fresh games. A failed
+winning-flight check does not invalidate separately established expiry, replay or transport evidence.
+
 ## Lessons
 
 Each lesson is a rule and its reason. The label says how strong the evidence was: *seen once* (one concrete finding), *seen repeatedly* (recurring failures or independent checks across subsystems), or *owner decision* (an accepted preference, which a new owner may change).

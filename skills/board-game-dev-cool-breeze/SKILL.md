@@ -179,6 +179,14 @@ The rules that cost the most to learn:
 - **Keep state durable**: owner words verbatim, current state newest first, curated learnings, the
   task checklist, the artifact ledger and one result file per assignment. Checkpoint before quota
   exhaustion, compaction or handoff.
+- **Scope blockers to their dependencies.** A permission question, failed check or incident blocks
+  the affected actions, not every task in the project. Contain active harm first, then continue
+  independent authorized work. Before reporting idle, identify the next useful task or explain why
+  each remaining task is actually blocked; see the blocked-work procedure in orchestration.
+- **Carry authority forward.** Do not ask again for an approved design, account or deployment
+  within its agreed scope. Prepare and verify the concrete action before seeking genuinely missing
+  approval. A recovery heartbeat reconciles work and advances the backlog; it is not a reason to
+  repeat an unchanged status while independent work remains.
 
 If these skills are installed, use them rather than reinventing their mechanisms:
 `event-driven-agents` (completion notifications), `long-run-handoff` (state that survives
