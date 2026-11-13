@@ -79,11 +79,14 @@ theme; do not ship a dark mode that only recolours the chrome.
 - [persian-safavid-illuminated-garden](../themes/persian-safavid-illuminated-garden/style.md)
   (light): a Safavid manuscript page. Flat decorative perspective, fine ink outlines, opaque gouache
   in jewel tones (lapis, turquoise, saffron, vermilion, malachite, ochre), gold leaf only as small
-  accents, an ivory paper ground, cypresses, pastel hills, girih tilework and ornamental clouds.
+  accents, an ivory paper ground, and a motif pool (cypresses, pastel hills, girih tilework,
+  ornamental clouds) and composition schemes that each subject draws from.
 - [persian-safavid-illuminated-garden-night](../themes/persian-safavid-illuminated-garden-night/style.md)
   (dark, inherits the garden): the same idiom on a lapis night ground, gold as the accent. Its UI
   tokens are proven; its art is a plan, because the parent's paper-ground art must be repainted for
   the night ground.
 
 To add a bundled theme, give it a `theme.json` in this shape and a `style.md` with no game-specific
-subjects.
+subjects, whose style prefix names technique only and whose motifs and composition schemes are a
+pool for subjects to draw from ([art-and-sound.md](art-and-sound.md), "Variety and one visual
+world").

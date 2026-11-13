@@ -1,13 +1,15 @@
 # Art direction: Persian Safavid illuminated garden
 
 A light theme. The game looks like a page from a 16th-century Safavid illustrated manuscript: an
-ivory page, jewel-tone gouache, ink outlines and small touches of gold. It was proven on a full set
-of cards, tokens, backs, textures, avatars and victory scenes for a card-drafting game, and its UI
-tokens passed contrast checks (4.5:1 for text pairs, 3:1 for control borders).
+ivory page, jewel-tone gouache, ink outlines and small touches of gold. Its technique was proven on
+a full set of cards, tokens, backs, textures, avatars and victory scenes for a card-drafting game,
+and its UI tokens passed contrast checks (4.5:1 for text pairs, 3:1 for control borders).
 
 The bitmap pipeline builds every prompt as: the **style prefix** below, then the **kind template**
 for the asset's kind, then the asset's `subject` from the game's `art/subjects.json`, then any
-amendment a review round added. Nothing else goes into a prompt.
+amendment a review round added. Nothing else goes into a prompt. Because the prefix goes into every
+prompt, it names technique only; motifs, sky and viewpoint come from each subject, so the set
+varies where its subjects do.
 
 ## Look
 
@@ -39,12 +41,25 @@ tokens in `theme.json`, so a painted scene and its UI frame read as one object.
 Give each game category or player one dominant accent from this list, and pair every colour with a
 shape or pattern, since colour alone fails for colour-blind players.
 
-## Motifs
+## Motif pool
 
-Stylized cypress trees; rounded rocky hills with pastel edges; girih strapwork tile patterns;
-ornamental Chinese-cloud scrolls; tiny figures in period dress at the flattened three-quarter angle
-of the idiom; domes, arches and columns; calm water as a patterned ripple, not a reflection. A
-scene shows a background building only when its subject names one.
+Subjects draw from these and name only what they need: stylized cypress trees; rounded rocky hills
+with pastel edges; girih strapwork tile patterns; ornamental Chinese-cloud scrolls; tiny figures in
+period dress at the flattened three-quarter angle of the idiom; domes, arches and columns; calm
+water as a patterned ripple, not a reflection; a sun disc. A scene shows a background building only
+when its subject names one. Across one kind, no motif appears in more than about a third of the
+pictures.
+
+## Composition schemes
+
+Scene kinds with many members (a location kind a game adds, or several hero or victory scenes) pick
+one scheme per subject and spread across the list: a garden in plan with its water channels, as on a
+garden carpet; a cliff terrace with rocks rising past the frame; an island in patterned water
+filling most of the picture; the roofscape of a town; an encampment of tents and lamps; a mountain
+pass with cloud below; a river bend with a bridge. Season and hour are further variables. The
+idiom's high horizon and looked-down-upon space suit any view from above. When players need a fact
+from the picture, such as a difficulty tier, give it one whole-scene variable, such as the hour, not
+a small detail.
 
 ## Do
 
@@ -75,30 +90,27 @@ scene shows a background building only when its subject names one.
 `{subject}` and `{accent}` come from the asset's subject entry. Edge treatment lives here, not in
 the prefix, because the kinds disagree about it.
 
-- **card**: "{subject}. Landscape vignette, subject centred, dominant accent {accent}. Keep every figure and object inside the central area; leave a wide margin of plain ivory paper on all four sides, widest at left and right. One or two large figures doing the named activity, filling the central third; no crowds, no distant skyline, no filler animals unless the subject names them. No building in the background unless the subject names one. Soft vignette fading to the paper colour at the edges."
-- **board**: "Panoramic view of {subject} as monumental architecture in the Persian-miniature idiom, landscape, dominant accent {accent}. The monument centred and whole, occupying the middle third, not cut by the frame. Soft vignette fading to the paper colour at the edges." (a large location or monument)
+- **card**: "{subject}. Landscape vignette, subject centred, dominant accent {accent}. Keep every figure and object inside the central area; leave a wide margin of plain ivory paper on all four sides, widest at left and right. One or two large figures doing the named activity, filling the central third; no crowds, no distant skyline, no filler animals unless the subject names them. No building in the background unless the subject names one. Soft vignette fading to warm ivory paper at the edges."
+- **board**: "Panoramic view of {subject} as monumental architecture in the Persian-miniature idiom, landscape, dominant accent {accent}. The monument centred and whole, occupying the middle third, not cut by the frame. Soft vignette fading to warm ivory paper at the edges." (a large location or monument)
 - **token**: "Circular medallion centred on a square of plain ivory paper, filling the square except for a narrow, even margin of paper (about 4 percent of the width) on every side; the paper outside the rim is flat and clean, with no vignette, fade, shadow or ornament. Inside: a flat {accent} ground, one bold symmetric emblem of {subject} filling the central 60 percent, a thin crisp gold rim only; no landscape, trees, rocks, ground or clouds inside the medallion; no ornamental border band."
-- **back**: "Symmetric ornamental illumination (tazhib, girih strapwork), portrait orientation, no figures: {subject}. Soft vignette fading to the paper colour at the edges."
+- **back**: "Symmetric ornamental illumination (tazhib, girih strapwork), portrait orientation, no figures: {subject}. Soft vignette fading to warm ivory paper at the edges."
 - **texture**: "Seamless fine paper grain, {subject}, no figures, no objects, suitable for tiling."
-- **hero**: "Wide panoramic scene: {subject}, landscape, warm inviting light, dominant accent {accent}. Soft vignette fading to the paper colour at the edges."
-- **avatar**: "Portrait bust, shoulders up, one figure, centred: {subject}. Dominant accent {accent}, plain ivory background, no scenery. Soft vignette fading to the paper colour at the edges."
-- **victory**: "Wide celebratory scene: {subject}, landscape, dominant accent {accent}. Soft vignette fading to the paper colour at the edges."
-- **icon**: "Simple bold emblem on a plain ivory ground, readable at 32 pixels: {subject}. Dominant accent {accent}, no scenery, no background detail. Soft vignette fading to the paper colour at the edges." (the app icon)
+- **hero**: "Wide panoramic scene: {subject}, landscape, warm inviting light, dominant accent {accent}. Soft vignette fading to warm ivory paper at the edges."
+- **avatar**: "Portrait bust, shoulders up, one figure, centred: {subject}. Dominant accent {accent}, plain ivory background, no scenery. Soft vignette fading to warm ivory paper at the edges."
+- **victory**: "Wide celebratory scene: {subject}, landscape, dominant accent {accent}. Soft vignette fading to warm ivory paper at the edges."
+- **icon**: "Simple bold emblem on a plain ivory ground, readable at 32 pixels: {subject}. Dominant accent {accent}, no scenery, no background detail. Soft vignette fading to warm ivory paper at the edges." (the app icon)
 
 ## Style prefix (verbatim)
 
 > Original illustration in the manner of a 16th-century Persian miniature painting (Safavid
 > manuscript illumination): flat decorative perspective, fine dark ink outlines, opaque gouache in
 > jewel tones (lapis lazuli blue, turquoise, saffron, vermilion, malachite green, ochre) with small
-> touches of gold leaf; stylized cypress trees, rounded rocky hills with pastel edges, patterned
-> tilework, ornamental clouds, tiny figures in period dress. The sky and background are plain ivory
-> paper, never gold leaf; gold appears only on small details such as finials, rims and a sun disc.
-> Robes are plain or patterned with small rosettes or leafy sprigs. One clear central subject
-> readable as a small thumbnail, calm uncluttered background of warm ivory paper. No inscriptions,
-> no glyph friezes, no writing on scrolls, pages, banners, cloth or buildings; scrolls and pages are
-> blank, cloth shows only plain stripes or small floral sprigs, and parapets show only plain
-> geometric tile bands. No border, no frame, no watermark, no signature. Not photorealistic, not
-> 3D, no modern objects.
+> touches of gold leaf. Gold appears only on small details such as finials and rims, never as a sky
+> or a background. Robes are plain or patterned with small rosettes or leafy sprigs. One clear
+> central subject readable as a small thumbnail. No inscriptions, no glyph friezes, no writing on
+> scrolls, pages, banners, cloth or buildings; scrolls and pages are blank, cloth shows only plain
+> stripes or small floral sprigs, and parapets show only plain geometric tile bands. No border, no
+> frame, no watermark, no signature. Not photorealistic, not 3D, no modern objects.
 
 ## UI
 
