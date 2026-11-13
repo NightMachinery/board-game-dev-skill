@@ -24,6 +24,8 @@ entropy, persistence/version behavior, migrations and failure/cancellation rules
 
 <Exact quick checks, affected package tests with normal CI flags, relevant
 browser specs and invariants. Identify controlled server/ports if needed.>
+<If the slice changes the screen: the states, sizes and directions/locales whose
+real-game screenshots the agent inspects, per "Screenshot review by agents".>
 
 ## Finish
 

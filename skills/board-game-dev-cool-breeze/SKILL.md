@@ -154,7 +154,8 @@ Test each property at the cheapest layer that can prove it: pure rules, the room
 contracts, the real transport, client plumbing, then full browser games driven by the server's
 offered keys through real controls. Those games are played by one game driver committed to the
 repository, never by scripts rewritten for each acceptance run; one short game per mode runs in CI
-on every push. Check invariants after every transition in seeded playouts, fuzz legal and
+on every push. A slice that changes the screen is accepted on real-game screenshots its agent has
+looked at. Check invariants after every transition in seeded playouts, fuzz legal and
 malformed input, prove privacy by varying hidden state and comparing views, and keep expensive
 strength or performance runs opt-in. The details and the reasons are in
 [references/testing.md](references/testing.md).
