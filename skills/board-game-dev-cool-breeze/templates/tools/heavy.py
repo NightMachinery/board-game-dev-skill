@@ -72,6 +72,13 @@ heap or -p flag gets ours appended; a value that has one is kept. The child
 also gets BGD_HEAVY_KIND=<kind>, BGD_HEAVY_HELD=1 when a slot is held,
 and BGD_HEAVY_LOCKS=<held kind locks>.
 
+The child does not inherit the caller's whole environment, only an allowlist:
+the shell, locale, CI, make, toolchain, Chrome/Codex paths, proxies, the
+Paseo agent identity and the tools' own BGD_* settings (CHILD_ENV_ALLOW below). A token in the caller's
+shell therefore never reaches a test, REPL or browser. Name any other
+variable a check needs in project.json "child_env_allow", or pass
+--inherit-env NAME for one run; both take exact names only.
+
 Nested runs: when BGD_HEAVY_HELD=1 is already set, an outer heavy.py holds
 a slot, so the inner run skips the mode gate and takes no slot (this keeps
 "heavy.py run -- make verify" from deadlocking). It still takes a browser or
@@ -186,6 +193,37 @@ DEFAULT_CHILD_ENV = (
     ("GOFLAGS", "-p=2"),
     ("GOMAXPROCS", "4"),
 )
+
+# A guarded command inherits only these variables (plus LC_*), so a test, REPL
+# or browser cannot print a token that the caller's shell happens to hold. They
+# cover the shell, locale, CI, make's jobserver, the Go, Node, Python, Chrome and
+# Codex toolchains, pass-through proxies and the notifier's agent identity. Add a variable a check really needs
+# by exact name: "child_env_allow" in project.json, or --inherit-env NAME for
+# one run. There is deliberately no prefix form.
+CHILD_ENV_ALLOW = frozenset((
+    "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TERM", "TZ", "LANG", "LANGUAGE",
+    "TMPDIR", "TEMP", "TMP", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
+    "XDG_RUNTIME_DIR", "SYSTEMROOT",
+    "CI", "GITHUB_ACTIONS", "RUNNER_OS", "RUNNER_TEMP",
+    "MAKELEVEL", "MAKEFLAGS", "MFLAGS",
+    "GOTOOLCHAIN", "GOPATH", "GOCACHE", "GOMODCACHE", "GOENV", "GOPROXY", "GOPRIVATE",
+    "GONOPROXY", "GONOSUMDB", "GOFLAGS", "GOMEMLIMIT", "GOMAXPROCS",
+    "NODE_OPTIONS", "PNPM_HOME", "COREPACK_HOME", "PLAYWRIGHT_BROWSERS_PATH",
+    "PYTHONPATH", "PYTHONDONTWRITEBYTECODE", "PYTHONUNBUFFERED", "VIRTUAL_ENV",
+    "CHROME_BIN", "CHROME_CDP", "CHROME_PORT", "CODEX_BIN", "CODEX_HOME",
+    "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
+    "http_proxy", "https_proxy", "no_proxy", "all_proxy",
+    "HEAVY_PRIORITY", "BGD_PROJECT_CONFIG", "BGD_ART_ROOT", "PASEO_BIN", "PASEO_AGENT_ID",
+))
+# The tools' own settings under env_prefix. A project may keep private settings
+# under the same prefix, so the prefix as a whole is not inherited.
+TOOL_ENV_SUFFIXES = ("RUN_DIR", "HEAVY_HELD", "HEAVY_KIND", "HEAVY_LOCKS", "HEAVY_WAIT",
+                     "MAX_SLOTS", "MIN_FREE_PCT_BROWSER", "MIN_SWAP_FREE_MB_BROWSER",
+                     "ORIGIN", "STACK", "ART_ROOT")
+ENV_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+PROJECT_ENV_ALLOW = tuple(CONFIG.get("child_env_allow", ()))
+if not all(isinstance(n, str) and ENV_NAME_RE.fullmatch(n) for n in PROJECT_ENV_ALLOW):
+    raise ValueError("project.json: child_env_allow lists exact variable names, no patterns")
 
 LEVEL_NORMAL = 1
 LEVEL_WARN = 2
@@ -803,8 +841,13 @@ class Guard:
                  proc_command: Optional[Callable[[int], Optional[str]]] = None,
                  proc_start: Optional[Callable[[int], Optional[str]]] = None,
                  proc_identity: Optional[Callable[[int], Optional[str]]] = None,
-                 rng: Optional[random.Random] = None, stdout=None, stderr=None):
+                 rng: Optional[random.Random] = None, stdout=None, stderr=None,
+                 inherit_env: Iterable[str] = ()):
         self.env: Dict[str, str] = dict(os.environ if env is None else env)
+        self.inherit_env: Tuple[str, ...] = tuple(inherit_env)
+        bad = [n for n in self.inherit_env if not ENV_NAME_RE.fullmatch(n)]
+        if bad:
+            raise ValueError(f"--inherit-env takes exact variable names, not {bad[0]!r}")
         self.platform = platform or sys.platform
         self.clock = clock or Clock()
         self.pid_alive = pid_alive or default_pid_alive
@@ -1300,7 +1343,9 @@ class Guard:
     # -- run -------------------------------------------------------------------------
 
     def child_env(self, kind: str, slot_held: bool, locks: Set[str]) -> Dict[str, str]:
-        env = dict(self.env)
+        allow = CHILD_ENV_ALLOW | {env_name(s) for s in TOOL_ENV_SUFFIXES}
+        allow |= set(PROJECT_ENV_ALLOW) | set(self.inherit_env)
+        env = {k: v for k, v in self.env.items() if k in allow or k.startswith("LC_")}
         for key, value in DEFAULT_CHILD_ENV:
             if not env.get(key):
                 env[key] = value
@@ -1496,7 +1541,10 @@ class Guard:
         env.update({env_name("HEAVY_NOTIFY_AGENT"): agent, env_name("HEAVY_NOTIFY_FD"): str(write_fd),
                     env_name("HEAVY_NOTIFY_ACK_FD"): str(ack_read), env_name("HEAVY_NOTIFY_LOG"): log_path})
         argv = [sys.executable, os.path.abspath(__file__), "run", "--kind", kind,
-                "--wait", repr(float(wait)), "--priority", priority, "--"] + cmd
+                "--wait", repr(float(wait)), "--priority", priority]
+        for name in self.inherit_env:
+            argv += ["--inherit-env", name]
+        argv += ["--"] + cmd
         try:
             try:
                 try:
@@ -2162,6 +2210,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--notify", default=None, metavar="UUID|auto",
                      help="detach and message this Paseo agent when the job ends (default $HEAVY_NOTIFY; "
                           "auto reads $PASEO_AGENT_ID)")
+    run.add_argument("--inherit-env", action="append", default=[], metavar="NAME",
+                     help="also pass this exact environment variable to CMD (repeatable); "
+                          "list standing needs in project.json child_env_allow")
 
     sub.add_parser("status", help="show mode, pressure, slots, locks, ordered queue and recent runs")
 
@@ -2186,7 +2237,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(args_in)
     if args.command != "run" and cmd is not None:
         parser.error("only the run command takes -- CMD")
-    guard = Guard()
+    try:
+        guard = Guard(inherit_env=getattr(args, "inherit_env", ()))
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.command == "run":
         if cmd is None:
             parser.error("run needs -- before the command, e.g. heavy.py run --kind test -- go test ./...")

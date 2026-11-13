@@ -39,7 +39,10 @@ successful bounds probe as evidence that a screen looks good: inspect images.
 Start interactive test sessions and disposable services with an explicit minimal
 environment allowlist and only the test credentials they need. Never print or
 return an environment, runtime config or credential-bearing object in a REPL;
-suppress expression return values when constructing such objects.
+suppress expression return values when constructing such objects. The guard
+already starts its children with an allowlisted environment; name any other
+variable a check needs in `tools/project.json` `child_env_allow`, never a
+prefix, and never export a secret into an agent's shell.
 
 Stop only your own processes, by verified PID. Never broad-match a process
 name, `pgrep -f` variable or `killall`. Killing a parent may leave children;

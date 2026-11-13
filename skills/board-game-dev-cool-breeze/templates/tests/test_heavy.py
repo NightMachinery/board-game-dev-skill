@@ -1390,6 +1390,55 @@ class RunTests(GuardCase):
         self.assertEqual(env["NODE_OPTIONS"], "--max-old-space-size=3096 --x")  # explicit cap kept
         self.assertEqual(env["GOFLAGS"], "-p=4")
 
+    def test_child_env_drops_unlisted_variables_and_never_logs_them(self):
+        canary = "canary-value-7f3a"
+        out = os.path.join(self.tmp, "env.json")
+        cmd = [PY, "-c", f"import json, os; json.dump(dict(os.environ), open({out!r}, 'w'))"]
+        g = self.guard(env={"HEAVY_TEST_CANARY": canary, heavy.env_name("DEPLOY_TOKEN"): canary,
+                            heavy.env_name("HEAVY_WAIT"): "12", "LC_ALL": "C",
+                            "HTTPS_PROXY": "http://proxy.invalid:3128"})
+        self.assertEqual(g.run("test", cmd, wait=0), 0)
+        with open(out) as fh:
+            env = json.load(fh)
+        self.assertNotIn("HEAVY_TEST_CANARY", env)
+        self.assertNotIn(heavy.env_name("DEPLOY_TOKEN"), env)  # the prefix alone grants nothing
+        self.assertNotIn(canary, json.dumps(env))
+        for kept in ("HOME", "LC_ALL", "HTTPS_PROXY", heavy.env_name("HEAVY_WAIT"), heavy.env_name("RUN_DIR")):
+            self.assertIn(kept, env)
+        if "PATH" in os.environ:
+            self.assertEqual(env["PATH"], os.environ["PATH"])
+        with open(os.path.join(self.run_dir, "logs", "heavy.jsonl")) as fh:
+            self.assertNotIn(canary, fh.read())
+        self.assertNotIn(canary, self.out.getvalue() + self.err.getvalue())
+
+    def test_child_env_passes_named_project_and_run_variables(self):
+        env_in = {"PROJECT_NEEDED": "a", "RUN_NEEDED": "b", "STILL_HIDDEN": "c"}
+        with patch.object(heavy, "PROJECT_ENV_ALLOW", ("PROJECT_NEEDED",)):
+            env = self.guard(env=env_in, inherit_env=["RUN_NEEDED"]).child_env("test", True, set())
+        self.assertEqual((env.get("PROJECT_NEEDED"), env.get("RUN_NEEDED")), ("a", "b"))
+        self.assertNotIn("STILL_HIDDEN", env)
+        with self.assertRaises(ValueError):
+            self.guard(inherit_env=["TOKEN*"])
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as exit_:
+            heavy.main(["run", "--kind", "light", "--inherit-env", "BAD-NAME", "--", PY, "-c", "pass"])
+        self.assertEqual(exit_.exception.code, 2)
+
+    def test_detached_copy_keeps_inherited_names(self):
+        g = self.guard(inherit_env=["RUN_NEEDED"])
+        seen = []
+
+        def refuse(argv, **_kw):
+            seen.append(list(argv))
+            raise OSError("no spawn in this test")
+
+        with patch.object(heavy.subprocess, "Popen", side_effect=refuse):
+            rc = g._detach("test", [PY, "-c", "pass"], 1.0, "normal",
+                           "00000000-0000-4000-8000-000000000000")
+        self.assertEqual(rc, 126)
+        argv = seen[0]
+        cut = argv.index("--")
+        self.assertEqual(argv[cut - 2:cut], ["--inherit-env", "RUN_NEEDED"])
+
     def test_light_child_is_not_marked_held(self):
         out = os.path.join(self.tmp, "env.json")
         cmd = [PY, "-c", f"import json, os; json.dump(dict(os.environ), open({out!r}, 'w'))"]

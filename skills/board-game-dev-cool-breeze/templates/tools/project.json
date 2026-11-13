@@ -75,5 +75,6 @@
     "static_dir": "web/build",
     "static": "caddy"
   },
-  "env_prefix": "BGD_"
+  "env_prefix": "BGD_",
+  "child_env_allow": []
 }
