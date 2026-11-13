@@ -181,8 +181,9 @@ The rules that cost the most to learn:
 - **Never poll with model turns.** Launch long jobs detached with a completion notification and end
   the turn. Arm the notification at launch. Without an agent host that delivers messages, use the
   harness's own tracked background task, or a small watcher script whose exit is the event.
-- **Keep state durable**: owner words verbatim, current state newest first, curated learnings, the
-  task checklist, the artifact ledger and one result file per assignment. Checkpoint before quota
+- **Keep state durable**: owner words verbatim, the owner's standing grants and refusals with
+  their sources (`AUTHORITY.md`), current state newest first, curated learnings, the task
+  checklist, the artifact ledger and one result file per assignment. Checkpoint before quota
   exhaustion, compaction or handoff.
 - **Scope blockers to their dependencies.** A permission question, failed check or incident blocks
   the affected actions, not every task in the project. Contain active harm first, then continue
@@ -190,8 +191,9 @@ The rules that cost the most to learn:
   each remaining task is actually blocked; see the blocked-work procedure in orchestration.
 - **Carry authority forward.** Do not ask again for an approved design, account or deployment
   within its agreed scope. Prepare and verify the concrete action before seeking genuinely missing
-  approval. A recovery heartbeat reconciles work and advances the backlog; it is not a reason to
-  repeat an unchanged status while independent work remains.
+  approval. A recovery heartbeat reconciles work and advances the backlog; it never repeats an
+  unchanged status. When every remaining task waits on the owner, ask once with the full question
+  and let the reply resume the work.
 
 If these skills are installed, use them rather than reinventing their mechanisms:
 `event-driven-agents` (completion notifications), `long-run-handoff` (state that survives

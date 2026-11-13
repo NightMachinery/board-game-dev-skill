@@ -23,9 +23,15 @@ offers (cron jobs, heartbeats, or system cron calling the host's CLI), on off-mi
   workers to reach a checkpoint;
 - **wind-down**, 16 minutes before it closes: workers write results and stop, the coordinator
   integrates what is green, writes the state and confirms no heavy job or browser is left;
-- **recovery ping**, hourly at an off-minute, always armed: compare live agents and jobs with the
-  state and act on any difference (a dead worker, a lost notification), without relaunching
-  running work.
+- **recovery ping**, always armed, hourly at an off-minute unless the owner set another cadence:
+  compare live agents, jobs, result files and owner messages with the state and act on any
+  difference (a dead worker, a lost notification, a result waiting to be integrated), without
+  relaunching running work. A ping that finds nothing new ends quietly, with no message to the
+  owner. Where the host allows it, make the comparison a small script that wakes the coordinator
+  only when that state changed, or when a result has waited unintegrated or a worker has been
+  silent past a stated limit, and that alerts the owner once if the coordinator does not answer
+  (see `event-driven-agents`). A cadence or heartbeat the owner asked for stays as asked; propose
+  a change rather than replacing it.
 
 **Integration lock.** Only one writer changes the mainline at a time. The simplest form: the
 coordinator is the only integrator. If several agents integrate, they take a lock first
@@ -68,7 +74,19 @@ Before yielding with no active job, check the current backlog once. Continue the
 independent task, prepare an inert implementation or proposal for the blocked task, or report that
 all remaining tasks depend on named external decisions. Use completion events for real waits.
 At recovery, reconcile named jobs/results once and act on new evidence; do not relaunch completed
-work, repeat unchanged checks, or send successive unchanged status reports while useful work exists.
+work, repeat unchanged checks, or send a status report that says nothing new. When every remaining
+task waits on the owner, ask once, with the full question, and let the owner's reply be the event
+that resumes the work.
+
+**Standing authority.** Keep `AUTHORITY.md` in the run directory: one line per standing grant or
+refusal, with its scope, its source (the owner's verbatim entry or a decision number) and what
+superseded it, if anything. For example: "source changes and commits in the repository: granted,
+continuous work (D9)", "production redeploy after a verified change: granted (D11)", "credentials
+or services outside the game: not granted, ask first". Update it when the owner grants, narrows or
+withdraws something. Briefs quote the lines that apply to their assignment. A replacement
+coordinator reads this file instead of rederiving authority from the whole verbatim log, and a new
+question adds a line rather than suspending the others. The file records what the owner said; it
+never grants anything on its own.
 
 ## Lessons
 
@@ -114,7 +132,7 @@ Each lesson is a rule and its reason. The label says how strong the evidence was
 
 - **9.20** On coordinator handoff, rebind inherited workers' report routes and reconcile result files against live status. Completion events may still belong to the original creator, and reboot queues can lose messages. *(seen repeatedly)*
 
-- **9.21** Keep a small private recovery set: verbatim owner instructions, current state, curated learnings, task checklist, artifact ledger and structured results. Preserve owner words separately from coordinator prompts so later agents do not mistake delegated directions for authorization. *(owner decision)*
+- **9.21** Keep a small private recovery set: verbatim owner instructions, standing authority, current state, curated learnings, task checklist, artifact ledger and structured results. Preserve owner words separately from coordinator prompts so later agents do not mistake delegated directions for authorization. *(owner decision)*
 
 - **9.22** Checkpoint before quota exhaustion, compaction, reboot or worker closure, including the remaining steps for long jobs. Durable state is useful only when it states what is live and who still owns the next action. *(seen repeatedly)*
 
@@ -131,3 +149,7 @@ Each lesson is a rule and its reason. The label says how strong the evidence was
 - **9.28** At a stall, inspect resource pressure, last job outcome, permission requests, network errors and result files before restarting agents. Several apparent workflow hangs were actually thrashing, lost notifications or idle sessions after API failure. *(seen repeatedly)*
 
 - **9.29** Dry-run orchestration scripts with stub workers and execute every prompt-construction path before launch. A syntax-only check missed an undefined variable and spent an entire coordination round discovering it. *(seen once)*
+
+- **9.30** Let the recovery check stay quiet when nothing changed, and make it notice results that wait unintegrated. Finished results once sat unmerged for hours because pings did not reach the coordinator, and later a blocked coordinator sent the owner the same status on every heartbeat. *(seen repeatedly)*
+
+- **9.31** Keep the owner's standing grants and refusals in one source-cited file that briefs and replacement coordinators read. Work stalled for hours twice because an agent asked again for authority already given, or treated one open question as a stop for unrelated authorized work. *(seen repeatedly)*

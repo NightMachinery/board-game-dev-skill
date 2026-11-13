@@ -10,7 +10,8 @@ Day-one checklist:
   focused guides: architecture, protocol, rules, testing, self-hosting, art, legal, decisions,
   roadmap.
 - A decisions file with numbered entries; later decisions name what they supersede.
-- The run directory outside the repository, and the task checklist gitignored.
+- The run directory outside the repository, with `AUTHORITY.md` listing the owner's standing
+  grants and refusals ([orchestration.md](orchestration.md)), and the task checklist gitignored.
 - Toolchain pins in the `Makefile`, CI and the deploy script, changed together.
 - The guard and its `make` targets, so no worker runs a raw heavy command.
 - Conventions turned into checks from the start: engine import guard, translation coverage,
