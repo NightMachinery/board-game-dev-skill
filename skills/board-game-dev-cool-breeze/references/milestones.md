@@ -65,10 +65,12 @@ its art before anyone could play it, and still had to reorder its plan to get th
    the driver plays full games in each mode.
 8. **M7: deploy.** Production hosting, the health check with build version, the production smoke
    suite, backups and rollback. Acceptance: a redeploy round trip with the smoke suite green.
-9. **M8: art.** The theme chosen at kickoff, the manifest and subjects, a pilot through the whole
-   pipeline, then production one asset at a time with review. The pilot can start right after M1,
-   in its own lane beside the build. Acceptance: every manifest entry is approved or has a recorded
-   placeholder decision, within the byte budgets.
+9. **M8: art.** The theme chosen at kickoff, a key visual of the main play screen picked by the
+   owner, the manifest, a variety plan for each large kind and its subjects, a pilot through the
+   whole pipeline, then production one asset at a time with review, each batch also reviewed as a
+   set ([art-and-sound.md](art-and-sound.md)). The pilot can start right after M1, in its own lane
+   beside the build. Acceptance: every manifest entry is approved or has a recorded placeholder
+   decision, every large kind passed its set review, within the byte budgets.
 10. **M9: game feel and polish (build).** Animations driven by server events and the game's own
     Animation setting, sound, the tutorial (a guided first game), tooltips on every element, the
     rules reference in the app, a move summary, the queued UX fixes, a deeper rules audit and

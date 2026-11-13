@@ -58,9 +58,10 @@ Do these with the owner before any code. Explain each choice with its tradeoffs 
    first) and ask which, if any, the owner wants changed.
 4. **Art direction.** Propose three to five distinct themes for the game: always offer the bundled
    themes that fit, plus fresh ones drawn from the game's setting. For each, give its mood, palette,
-   idiom, whether it is light or dark, how it reads at thumbnail size on a phone, and what it costs
-   to produce. The owner picks one to start with. A game launches with **one** theme; more themes,
-   including a dark one, come later through inheritance. See
+   idiom, whether it is light or dark, how it reads at thumbnail size on a phone, what would make
+   the game look like no other (the play screen, the symbols, the viewpoint, not only the
+   paintings), and what it costs to produce. The owner picks one to start with. A game launches with
+   **one** theme; more themes, including a dark one, come later through inheritance. See
    [references/themes.md](references/themes.md).
 5. **Operations.** Where it will be hosted and under which URL, the work window (continuous, a
    nightly window such as 00:00-10:00, or paused), which agent providers and accounts may be used,
@@ -137,7 +138,9 @@ theme, not by order.
 - **Bots** ([references/bots.md](references/bots.md)): random and greedy baselines first, honest
   observations only, measured strength before any named difficulty ships.
 - **Art and sound** ([references/art-and-sound.md](references/art-and-sound.md)): a pilot through
-  the whole pipeline before bulk production; vectors drawn by a strong model in a render, look,
+  the whole pipeline before bulk production; a style prefix of technique only, a variety plan for
+  each large kind, and each batch approved as a set on a thumbnail contact sheet; symbols, board
+  and page in the paintings' idiom; vectors drawn by a strong model in a render, look,
   correct loop, bitmaps generated one at a time; approved originals committed losslessly; shipped
   files derived and content-hashed.
 - **Polish before review**: animations, sound, the tutorial and explanatory UI are built before the

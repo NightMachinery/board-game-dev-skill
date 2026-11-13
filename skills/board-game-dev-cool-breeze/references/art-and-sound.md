@@ -17,6 +17,31 @@ Two pipelines, matched to what each asset needs, under one theme ([themes.md](th
   once, ships as small compressed files loaded after the first gesture, and keeps a synthesized
   fallback.
 
+## Variety and one visual world
+
+Players meet art side by side: in a picker, a hand, and on the board they watch all game. Aim for a
+set in which every asset is recognisable among its neighbours at thumbnail size and the whole
+screen belongs to one world. Reviewing one picture at a time cannot see either property.
+
+- **The prefix carries technique only**: medium, line, palette rules and the bans. It goes into
+  every prompt, so any motif, sky or ground it names appears in every picture. Subjects choose
+  their motifs from the theme's motif pool.
+- **Plan each large kind's variety before writing its subjects.** The subject author works from a
+  short named list of composition schemes and viewpoints and spreads the kind across them, with
+  season, hour, weather or terrain as further variables. A fact players need from the picture (a
+  difficulty tier, an active module) gets one whole-scene variable, such as the hour, never a
+  small detail. Related members, such as two tiers of one place, differ by composition, approach
+  or hour, not by a small rearrangement. The viewpoint follows the game's story: if the players
+  arrive by air, show the places from the air.
+- **Review each batch as a set.** Before a batch is approved, a reviewer who did not write its
+  subjects reads the whole kind so far on one contact sheet at thumbnail size, in the order players
+  meet it, and rejects the batch if neighbours share a scheme or one motif appears in more than
+  about a third of the pictures. The per-image checks (8.08) still apply.
+- **One visual world.** Symbols, dice, the board and the page chrome are drawn in the paintings'
+  idiom, not taken from a generic icon set. Before bulk painting, design the main play screen as a
+  key visual: two or three mockups of one fixed mid-game state at phone and desktop size, from
+  which the owner picks. It gates the style file and the art production, not gameplay work.
+
 ## Lessons
 
 Each lesson is a rule and its reason. The label says how strong the evidence was: *seen once* (one concrete finding), *seen repeatedly* (recurring failures or independent checks across subsystems), or *owner decision* (an accepted preference, which a new owner may change).
@@ -62,3 +87,11 @@ Each lesson is a rule and its reason. The label says how strong the evidence was
 - **8.20** Unlock audio on a user gesture, load files lazily, bound overlapping voices and retain a synthesized fallback. Sound loading must neither delay play nor replay an event that already passed. *(seen repeatedly)*
 
 - **8.21** Reference only approved assets through a generated availability index and render deliberate placeholders for the rest. Approval state should control delivery, so incomplete art production never creates broken images or ships a rejected attempt. *(seen repeatedly)*
+
+- **8.22** Keep the style prefix to technique and let each subject choose its motifs, sky and viewpoint. A prefix that named cypresses, pastel hills, ornamental clouds, an ivory sky and a sun disc put all of them into every one of 63 destination paintings. *(seen once)*
+
+- **8.23** Plan a large kind's variety before writing its subjects: named composition schemes with a required spread, free variables, and one whole-scene variable for each fact players need from the picture. A template that asked for the same vignette every time gave 63 destinations one composition, and two tiers of a place differed by a small rearrangement. *(seen once)*
+
+- **8.24** Approve art batches as a set, on one thumbnail contact sheet read in player order by a reviewer who did not write the subjects. Each of those 63 paintings passed its own review, and a player leafing through the picker saw one card 63 times. *(seen once)*
+
+- **8.25** Draw symbols, dice, the board and the page in the paintings' idiom, and design the main play screen as a key visual before bulk painting. A generic line-icon set read as a second product beside gouache paintings, and the board players watch all game was a blank rectangle. *(seen once)*
