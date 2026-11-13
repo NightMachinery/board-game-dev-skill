@@ -28,8 +28,8 @@ owner overrides one, record it in the project's decisions file and follow the ov
 - **Coordinator**: the agent that plans, briefs workers, integrates their branches and reports. It
   owns the shared files and the public account of progress.
 - **Worker**: an agent given one bounded slice through a written brief.
-- **Slice**: one cohesive change with an outcome name, such as `M3.trade-costs`. A **milestone**
-  (`M3`) is a group of slices with an acceptance paragraph. Names describe the outcome in plain
+- **Slice**: one cohesive change with an outcome name, such as `M4.trade-costs`. A **milestone**
+  (`M4`) is a group of slices with an acceptance paragraph. Names describe the outcome in plain
   words; never letter-and-number codes such as `S5a`.
 - **Run directory**: private state outside the repository (owner instructions verbatim, current
   state, notes, the artifact ledger, briefs, results, logs and screenshots). The repository is
@@ -119,8 +119,9 @@ roles.
 ## Phases 2 to 6: the build
 
 Run these as milestones. [references/milestones.md](references/milestones.md) has the execution
-order (bots come before the server there, because the simulator needs only the engine), each
-milestone's acceptance and the slices that usually belong to it. The list below is grouped by
+order, each milestone's acceptance and the slices that usually belong to it. The order is
+playable first: right after the engine core comes one game a person can play end to end, and
+modules, the catalogue, bots and the full platform grow from it. The list below is grouped by
 theme, not by order.
 
 - **Rules capture** ([references/rules-capture.md](references/rules-capture.md)): a complete rules
