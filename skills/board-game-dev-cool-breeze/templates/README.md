@@ -36,7 +36,11 @@ Use this order to make the first quick gate runnable:
 8. Add CI to run that gate with the pinned tools and relevant full/race tests.
    Create `e2e/` with Playwright config, a controlled test server, test scripts
    and a `shots` project before running `make e2e`, `make shots` or
-   `make verify-full`. Those projects are not supplied by this template.
+   `make verify-full`. Those projects are not supplied by this template. From
+   the first playable game, add the committed game driver and its routine
+   games (one per mode, phone size) to `make e2e`, and run `make e2e` in CI on
+   every push; the wider set reads `E2E_FULL=1`. See the skill's testing
+   reference, "The game driver".
 9. Configure the local/dev URL and hosting layout, run the hosting adoption
    check and use its printed frontend URL for screenshots. Production
    deployment requires the owner's explicit deployment authority.

@@ -9,15 +9,48 @@ invariants after every transition; fuzzing of legal play and malformed input; ac
 client unit tests; Playwright games driven by offered keys through real controls; the screenshot
 matrix and probes; a production smoke suite.
 
+## The game driver
+
+From the first playable milestone, keep one game driver in the repository. It reads the current
+redacted view through the read-only test hook (6.13), picks among the offered keys with a seeded
+policy or a supplied plan, and performs each choice through the real controls: select, arm,
+confirm, private choices and the hand-off between seats. It owns the readiness waits (6.14), so a
+harness bug is fixed once for every later run. Its control mapping has offline tests against the
+component gallery.
+
+It also owns evidence capture for games with hidden information: clear staged picks, hide private
+regions, and assert that the public board is still visible, so a blank masked page cannot pass a
+visual review.
+
+`make e2e` plays one short seeded game per mode to a terminal outcome at one phone size, with a
+disposable server secret and journal, and CI runs it on every push. Desktop sizes, every module
+group and winning games are a wider opt-in target, run at milestones, releases and by reviewers.
+Locally, a slice runs only the specs its change affects (6.17). A new mode, module or rare control
+adds one representative case or a gallery case, not a new script. Acceptance runs, reviewer agents
+and the production smoke use this driver and add only their own observations. The run directory
+holds their evidence, never the only copy of the code that produced it.
+
 ## Timed playthroughs
 
-Prove the player's control path before starting a real deadline: selectors, action confirmation,
-private-choice order and measured decision/tool latency must fit the round budget. Practise on
-an untimed mode or a clearly labelled fixture; keep the accepted timed game on its real clock.
-A script or agent that spends the window debugging controls has not tested strategic playability.
-Record that coverage gap honestly, repair the driver outside the live attempt, and choose a
-bounded next test or a human playthrough instead of an indefinite series of fresh games. A failed
-winning-flight check does not invalidate separately established expiry, replay or transport evidence.
+Separate three questions, because one attempt rarely answers all of them:
+
+- Do the mechanics hold? Expiry, restart and replay are tested on the real clock with no agent in
+  the loop.
+- Is the game playable well? An agent plays for strategy and understanding on an untimed mode or a
+  clearly labelled fixture with the same rules, through the real controls.
+- Do the controls keep pace? First measure the budget: the deadline, how many actions a round
+  needs, and the agent's measured decision and tool latency. If an agent acting click by click fits,
+  let it play. If not, the agent decides once per round from its own current view, as an ordered
+  list of offered keys, and the driver performs them through the real controls. A plan may use
+  only that viewer's offered keys and private information, never another seat's or a future
+  draw. The driver re-reads the view after every action, checks the next key is still offered,
+  and stops for a new plan when it is not.
+
+Fix a broken driver on the untimed fixture, not by starting fresh timed games, and set a small
+limit on timed attempts before reporting the gap. When the owner asks an agent to play a timed
+game directly, do that as asked and report the result. A human playthrough answers how the
+pressure feels. A failed winning-game attempt does not invalidate separately established expiry,
+replay or transport evidence.
 
 ## Lessons
 
@@ -70,3 +103,7 @@ Each lesson is a rule and its reason. The label says how strong the evidence was
 - **6.23** Measure paired clean baseline and candidate builds and distinguish cumulative budgets from per-slice allowances. Build hashes and shared runtime helpers can move compressed entry bytes even without an obvious new import. *(seen repeatedly)*
 
 - **6.24** Restrict production browser runs to an explicit smoke suite and health-check reachability before taking the browser lock. An unreachable live URL can otherwise monopolize shared test capacity for minutes per spec. *(seen repeatedly)*
+
+- **6.25** Commit the driver that plays full games, and run one short game per mode in CI on every push. Acceptance runs written as private per-run scripts failed several times on harness defects (a cancelling key press, a privacy mask that hid the page, a timeout) rather than on the product, while the committed suite never played a game. *(seen repeatedly)*
+
+- **6.26** For a real deadline, measure the action budget against the agent's decision and tool latency before playing, and let the driver execute a per-round plan when click-by-click play does not fit. Timed attempts in which the agent reasoned between clicks lost on the clock before the first move landed. *(seen once)*

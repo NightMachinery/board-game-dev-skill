@@ -12,7 +12,15 @@ opponent's public state and how to recover from a mistaken selection. Exercise
 the relevant create/join/reconnect, waiting/opponent action, card sheet, rules,
 tooltip, undo/rematch and end-game paths. Keep viewer identities separate.
 Try keyboard and touch where the assignment supplies them. Follow the rules
-instead of testing only the implementation's happy path.
+instead of testing only the implementation's happy path. Drive play with the
+repository's game driver `<DRIVER_PATH>`; do not write a new one.
+
+For a timed mode, follow "Timed playthroughs" in the skill's testing
+reference: play for strategy untimed; measure the deadline against your
+decision and tool latency; if click-by-click play does not fit, decide each
+round as an ordered list of your own offered keys and let the driver perform
+them, re-checking each key. Start at most `<TIMED_ATTEMPTS>` timed games, then
+report decision and execution times and any gap.
 
 For each real problem record priority P0..P3 using the screens-review scale,
 the exact state/steps, expected versus observed behavior, why it matters to

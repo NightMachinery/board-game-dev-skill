@@ -14,7 +14,7 @@ PW_ARGS ?=
 TEST_TIMEOUT ?= 20m
 GEN_DIR ?= web/src/lib/wire
 
-.PHONY: install install-offline dev verify-quick verify verify-full e2e gen gen-check build shots test-go test-race test-web check-web lint test-tools
+.PHONY: install install-offline dev verify-quick verify verify-full e2e e2e-full gen gen-check build shots test-go test-race test-web check-web lint test-tools
 
 install:
 	$(HEAVY) run --kind install -- go -C server mod download
@@ -58,8 +58,14 @@ build:
 	$(HEAVY) run --kind build -- pnpm -C web build
 	$(HEAVY) run --kind build -- go -C server build -trimpath -o bin/server ./cmd/server
 
+# e2e: the smoke specs plus one short seeded game per mode at a phone size, played by the
+# committed game driver; CI runs it on every push. e2e-full adds desktop sizes, every module
+# group and winning games (E2E_FULL=1 in the Playwright config); run it at milestones and releases.
 e2e: build
 	$(HEAVY) run --kind browser -- pnpm -C e2e exec playwright test $(if $(GREP),--grep '$(GREP)') $(PW_ARGS)
+
+e2e-full: build
+	$(HEAVY) run --kind browser -- env E2E_FULL=1 pnpm -C e2e exec playwright test $(if $(GREP),--grep '$(GREP)') $(PW_ARGS)
 
 shots: build
 	$(HEAVY) run --kind browser -- pnpm -C e2e exec playwright test --project shots $(PW_ARGS)
@@ -69,4 +75,4 @@ verify-quick: lint check-web gen-check test-go test-web test-tools
 verify: verify-quick test-race build
 
 # Set up e2e's controlled test server in its Playwright config, never a worker dev server.
-verify-full: verify e2e shots
+verify-full: verify e2e-full shots
