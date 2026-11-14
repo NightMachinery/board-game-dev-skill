@@ -26,6 +26,7 @@ port checks inspect the right machine. Remote shipping is deliberately omitted.
 
 ```sh
 python3 self_host.py setup --url http://localhost
+python3 self_host.py setup --url http://game.example.test --caddy-layout fragment
 python3 self_host.py dev-start
 python3 self_host.py status
 python3 self_host.py redeploy
@@ -67,21 +68,48 @@ service rollback after a startup failure. Add those for the game's durable-data
 contract before claiming production upgrade safety. This template preserves
 previous files, cleans failed new processes and reports startup failure.
 
-The block in `~/Caddyfile`
+Two Caddy layouts are supported via `--caddy-layout inline|fragment` (and
+`BGD_CADDY_LAYOUT`), defaulting to `inline` for backwards compatibility:
+
+- `inline` (default): edits the game's marked block directly in `--caddyfile` /
+  `BGD_CADDYFILE` (default `~/Caddyfile`). Passing `--caddy-sites` or
+  `BGD_CADDY_SITES` is rejected unless `fragment` layout is active.
+- `fragment`: keeps the top-level Caddyfile read-only (it may be a symlink to
+  a tracked file) and edits only this game's marked block inside `--caddy-sites`
+  / `BGD_CADDY_SITES` (default `~/.config/caddy/managed-sites/sites.caddy`).
+
+Configuration precedence is CLI flag (`--caddy-layout`, `--caddyfile`,
+`--caddy-sites`), then environment (`BGD_CADDY_LAYOUT`, `BGD_CADDYFILE`,
+`BGD_CADDY_SITES`), then saved `.self-host/config.json`, then built-in defaults.
+Chosen layout and paths persist in `.self-host/config.json` across restarts.
+
+Fragment mode requires an existing top-level Caddyfile importing the fragment
+once at top level via an absolute or Caddy-env-derived path such as
+`import {$HOME}/.config/caddy/managed-sites/*.caddy`, which safely matches zero
+files initially and ignores `.lock`, `.before`, and `.candidate` files. Relative
+imports, duplicate imports, unsafe globs matching lock/backup files, markers in
+top-level or sibling imported files, symlinked fragments, and fragments
+resolving to the top-level file are refused before any write.
+
+The rendered block
 has an explicit redirect from the opposite scheme to the chosen URL. For a
 custom URL port, the opposite scheme uses its normal port. HTTPS needs working
 certificate provisioning, or a locally trusted intranet certificate. Plain
 HTTP requires neither and the clipboard helper works there too.
 
-`BGD_CADDYFILE` chooses a different shared file. Only this game's marked
-block is replaced. A file lock serializes shared edits. A running Caddy
-adapts before/after text using its own environment; the script verifies that
-its current configuration matches the original file before loading anything.
-A rejected change restores the file. A missing or mismatched file never
-replaces another Caddy's sites. A new Caddy starts in `<project>-caddy` tmux;
-an existing shared Caddy stays in its owner's session. The template requires
-a local TCP admin listener. It leaves shared Caddy running on `stop`, while
-stopping this game's backend and client development processes.
+Shared file locks serialize edits on both the top-level Caddyfile and the target
+fragment. A running Caddy adapts the pre-mutation top-level configuration using
+its own environment BEFORE mutating the fragment and proves running JSON
+matches that baseline. After editing the target, fragment mode verifies the
+game's routes in the adapted JSON before `/load`. On a rejected `/load` or an
+uncertain reply confirmed still on `old`, the script restores only its exact
+owned bytes and verifies running JSON matches the baseline again; an `unknown`
+outcome preserves candidate/before backups in `.self-host/` without blind
+overwrites. A missing or mismatched config never replaces another Caddy's sites.
+A new Caddy starts in `<project>-caddy` tmux; an existing shared Caddy stays in
+its owner's session. The template requires a local TCP admin listener. It leaves
+shared Caddy running on `stop`, while stopping this game's backend and client
+development processes.
 
 Every managed process uses kill-session followed by `tmux new -d -s`, with
 explicit `-e VAR=value` for present proxy and runtime variables. Proxy settings
