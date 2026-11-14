@@ -21,6 +21,7 @@ import re
 import shlex
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -66,6 +67,7 @@ _DEFAULT_CADDY_SITES = Path.home() / '.config' / 'caddy' / 'managed-sites' / 'si
 CADDY_LAYOUT = os.environ.get('BGD_CADDY_LAYOUT') or _DEFAULT_CADDY_LAYOUT
 CADDYFILE = Path(os.environ.get('BGD_CADDYFILE') or _DEFAULT_CADDYFILE).expanduser()
 CADDY_SITES = Path(os.environ.get('BGD_CADDY_SITES') or _DEFAULT_CADDY_SITES).expanduser()
+CADDY_LOCK_DIR: Path | None = None
 _INITIAL_CADDY_LAYOUT = CADDY_LAYOUT
 _INITIAL_CADDYFILE = CADDYFILE
 _INITIAL_CADDY_SITES = CADDY_SITES
@@ -413,14 +415,18 @@ def deploy(command, url=None, *, caddy_layout=None, caddyfile=None, caddy_sites=
     site = parse_site_url(url or previous.get('url') or default_url())
     mode = 'dev' if command == 'dev-start' else 'prod'
     # Refuse an unrelated shared Caddy before stopping the game.
-    if caddy_config.layout == 'fragment':
-        validate_fragment_setup(caddy_config)
+    imported_files = validate_fragment_setup(caddy_config)[0] if caddy_config.layout == 'fragment' else ()
     if caddy_config.caddyfile.exists():
-        address = _caddy_admin_address_for(caddy_config.caddyfile)
+        address = caddy_admin_address(caddy_config.caddyfile)
         if address is None:
             raise RuntimeError('this template needs a local TCP Caddy admin listener')
         try:
-            _check_caddy_serves_for_config(address, caddy_config.caddyfile.read_bytes(), caddy_config)
+            check_caddy_serves(
+                address,
+                caddy_config.caddyfile.read_bytes(),
+                caddyfile=caddy_config.caddyfile,
+                known_aliases=known_caddy_aliases(caddy_config, imported_files),
+            )
         except CaddyUnreachable:
             pass
     caddy_stamp = proxy_stamp(caddy_config)
@@ -446,7 +452,7 @@ def deploy(command, url=None, *, caddy_layout=None, caddyfile=None, caddy_sites=
         raise RuntimeError('static build is missing; run setup')
     try:
         start_components(mode, site, ports)
-        _apply_caddy_with_config(site, mode, ports, caddy_config)
+        apply_caddy(site, mode, ports, caddy_config=caddy_config)
     except BaseException:
         stop_sessions()
         raise
@@ -721,7 +727,14 @@ def _collect_matched_files(expanded: str) -> list[Path]:
 
 
 def validate_fragment_setup(caddy_config: CaddyConfig, *, env=None) -> tuple[tuple[Path, ...], int, int]:
-    """Validate fragment-mode paths, top-level single import, and marker hygiene."""
+    """Validate fragment-mode paths, top-level single import, and marker hygiene.
+
+    Supported top-level import boundary: literal absolute paths or patterns
+    whose {$VAR} placeholders (such as {$HOME}) resolve completely in the
+    caller's environment. Unresolved top-level import placeholders and relative
+    import paths are rejected before any mutation because exact-once inclusion
+    and sibling import membership cannot otherwise be proved.
+    """
     env = os.environ if env is None else env
     top = caddy_config.caddyfile
     sites = caddy_config.caddy_sites
@@ -739,7 +752,6 @@ def validate_fragment_setup(caddy_config: CaddyConfig, *, env=None) -> tuple[tup
 
     imports, snippets = scan_top_level_imports(top_text)
     resolved_matches = 0
-    unresolved_candidates = 0
     imported_files: list[Path] = []
     seen_imported: set[Path] = set()
 
@@ -750,39 +762,34 @@ def validate_fragment_setup(caddy_config: CaddyConfig, *, env=None) -> tuple[tup
         if is_snippet:
             continue
         expanded, resolved = _expand_caddy_placeholders(pat, env)
-        if resolved:
-            assert expanded is not None
-            if not os.path.isabs(expanded):
-                raise ValueError(f'relative import path in Caddyfile is not supported: {pat}')
-            dir_part, name_pat = os.path.split(os.path.normpath(expanded))
-            _check_unsafe_glob(dir_part, name_pat, sites, pat, check_dir=True)
-            if _pattern_matches_target(expanded, sites):
-                if imp.args:
-                    raise ValueError(f'import of managed fragment {sites} must not pass arguments')
-                resolved_matches += 1
-            for matched in _collect_matched_files(expanded):
-                if matched not in seen_imported:
-                    seen_imported.add(matched)
-                    imported_files.append(matched)
-                if matched.resolve() != sites.resolve():
-                    sibling_text = matched.read_text()
-                    if BEGIN in sibling_text or END in sibling_text:
-                        raise RuntimeError(
-                            f'duplicate managed Caddy markers found in sibling imported file {matched}'
-                        )
-        else:
-            if not (pat.startswith('/') or re.match(r'^\{\$[A-Za-z_][A-Za-z0-9_]*(?::[^}]*)?\}/', pat)):
-                raise ValueError(f'relative import path in Caddyfile is not supported: {pat}')
-            name_pat = os.path.basename(pat)
-            _check_unsafe_glob('', name_pat, sites, pat, check_dir=False)
-            if fnmatch.fnmatchcase(sites.name, name_pat):
-                if imp.args:
-                    raise ValueError(f'import of managed fragment {sites} must not pass arguments')
-                unresolved_candidates += 1
+        if not resolved:
+            raise ValueError(
+                f'unresolved environment placeholder in top-level Caddyfile import {pat!r} is not supported; '
+                'ensure the variable is set identically for both caller and Caddy or use an absolute path'
+            )
+        assert expanded is not None
+        if not os.path.isabs(expanded):
+            raise ValueError(f'relative import path in Caddyfile is not supported: {pat}')
+        dir_part, name_pat = os.path.split(os.path.normpath(expanded))
+        _check_unsafe_glob(dir_part, name_pat, sites, pat, check_dir=True)
+        if _pattern_matches_target(expanded, sites):
+            if imp.args:
+                raise ValueError(f'import of managed fragment {sites} must not pass arguments')
+            resolved_matches += 1
+        for matched in _collect_matched_files(expanded):
+            if matched not in seen_imported:
+                seen_imported.add(matched)
+                imported_files.append(matched)
+            if matched.resolve() != sites.resolve():
+                sibling_text = matched.read_text()
+                if BEGIN in sibling_text or END in sibling_text:
+                    raise RuntimeError(
+                        f'duplicate managed Caddy markers found in sibling imported file {matched}'
+                    )
 
     if resolved_matches > 1:
         raise RuntimeError(f'{top} imports {sites} more than once')
-    if resolved_matches == 0 and unresolved_candidates == 0:
+    if resolved_matches == 0:
         raise RuntimeError(f'{top} does not import {sites}')
 
     if sites.exists():
@@ -792,7 +799,7 @@ def validate_fragment_setup(caddy_config: CaddyConfig, *, env=None) -> tuple[tup
         if BEGIN in sites_text and sites_text.index(END) < sites_text.index(BEGIN):
             raise RuntimeError('reversed managed Caddy markers')
 
-    return tuple(sorted(imported_files)), resolved_matches, unresolved_candidates
+    return tuple(sorted(imported_files)), resolved_matches, 0
 
 
 def _file_digest_entry(path: Path, *, allow_symlink: bool) -> list[object] | None:
@@ -899,15 +906,6 @@ def caddy_admin_address(caddyfile: Path | None = None) -> str | None:
     if admin.get("disabled"):
         return None
     return admin_listen_address(str(admin.get("listen") or CADDY_DEFAULT_ADMIN))
-
-
-_ORIG_CADDY_ADMIN_ADDRESS = caddy_admin_address
-
-
-def _caddy_admin_address_for(caddyfile: Path) -> str | None:
-    if caddy_admin_address is _ORIG_CADDY_ADMIN_ADDRESS:
-        return caddy_admin_address(caddyfile)
-    return caddy_admin_address()
 
 
 def caddy_admin_opener() -> urllib.request.OpenerDirector:
@@ -1063,31 +1061,18 @@ def check_caddy_serves(
     *,
     caddyfile: Path | None = None,
     known_aliases: dict[str, str] | None = None,
+    _snapshot_out: dict[str, object] | None = None,
 ) -> str:
     """Raise CaddyMismatch unless the running Caddy on address serves the
     Caddyfile text before (None for a file not created yet, which needs a
     Caddy with no config). Loads nothing. Returns the path the running
     Caddy hides its config file by (see load_through_caddy)."""
-    hide_path, _, _ = _check_caddy_serves_snapshot(
+    hide_path, adapted_hidden, _ = _check_caddy_serves_snapshot(
         address, before, caddyfile=caddyfile, known_aliases=known_aliases
     )
+    if _snapshot_out is not None:
+        _snapshot_out['adapted'] = adapted_hidden
     return hide_path
-
-
-_ORIG_CHECK_CADDY_SERVES = check_caddy_serves
-
-
-def _check_caddy_serves_for_config(address: str, before: bytes | None, caddy_config: CaddyConfig) -> tuple[str, object | None]:
-    if check_caddy_serves is _ORIG_CHECK_CADDY_SERVES:
-        imported_files = ()
-        if caddy_config.layout == 'fragment':
-            imported_files, _, _ = validate_fragment_setup(caddy_config)
-        aliases = known_caddy_aliases(caddy_config, imported_files)
-        hide_path, adapted_hidden, _ = _check_caddy_serves_snapshot(
-            address, before, caddyfile=caddy_config.caddyfile, known_aliases=aliases
-        )
-        return hide_path, adapted_hidden
-    return check_caddy_serves(address, before), None
 
 
 def _collect_handlers(obj: object, dials: set[str], hide_files: set[str]) -> None:
@@ -1143,7 +1128,7 @@ def verify_fragment_in_adapted(adapted: object, site: Site, mode: str, ports: di
             )
 
 
-def _load_through_caddy_impl(
+def load_through_caddy(
     address: str,
     before: bytes | None,
     *,
@@ -1152,7 +1137,25 @@ def _load_through_caddy_impl(
     hide_path: str | None = None,
     known_aliases: dict[str, str] | None = None,
     verify_candidate=None,
+    verify_source=None,
 ) -> None:
+    """Have the running Caddy on address load the edited Caddyfile, but only
+    if it is the Caddy that serves the file as it stood before the edit.
+
+    Caddy adapts both versions itself (/adapt), so a {$VAR} placeholder in
+    the shared file resolves from Caddy's environment, as it did when Caddy
+    started, whatever the shell running this script exports. Adapted text
+    hides the config file by a relative stand-in (ADAPTED_TEXT_HIDE), so the
+    path Caddy really hides it by is read from the running config and put
+    back. The unedited version must then equal the running config (hide
+    lists compared as sets; check_caddy_serves).
+    If it does not, the file is not what this Caddy serves: a wrong path,
+    another Caddy on the address, imports that resolve differently here, or
+    edits not loaded yet. Then this raises CaddyMismatch before loading
+    anything. The edited version, with the same hide path, goes to /load as
+    JSON, which Caddy applies only if all of it provisions. When the reply
+    to that is lost, the running config shows whether the load took.
+    """
     target = CADDYFILE if caddyfile is None else caddyfile
     if hide_path is None:
         hide_path, before_adapted, _ = _check_caddy_serves_snapshot(
@@ -1164,9 +1167,13 @@ def _load_through_caddy_impl(
             raise CaddyMismatch(
                 f"the Caddy on {address} changed before loading {target}"
             )
+    if verify_source is not None:
+        verify_source()
     edited = with_config_file_hidden(adapt_in_caddy(address, target.read_bytes()), hide_path)
     if verify_candidate is not None:
         verify_candidate(edited)
+    if verify_source is not None:
+        verify_source()
     try:
         caddy_admin_request(
             address,
@@ -1197,78 +1204,219 @@ def _load_through_caddy_impl(
         ) from exc
 
 
-def load_through_caddy(
-    address: str,
-    before: bytes | None,
-    *,
-    caddyfile: Path | None = None,
-    before_adapted: object = None,
-    hide_path: str | None = None,
-    known_aliases: dict[str, str] | None = None,
-    verify_candidate=None,
-) -> None:
-    """Have the running Caddy on address load the edited Caddyfile, but only
-    if it is the Caddy that serves the file as it stood before the edit.
-
-    Caddy adapts both versions itself (/adapt), so a {$VAR} placeholder in
-    the shared file resolves from Caddy's environment, as it did when Caddy
-    started, whatever the shell running this script exports. Adapted text
-    hides the config file by a relative stand-in (ADAPTED_TEXT_HIDE), so the
-    path Caddy really hides it by is read from the running config and put
-    back. The unedited version must then equal the running config (hide
-    lists compared as sets; check_caddy_serves).
-    If it does not, the file is not what this Caddy serves: a wrong path,
-    another Caddy on the address, imports that resolve differently here, or
-    edits not loaded yet. Then this raises CaddyMismatch before loading
-    anything. The edited version, with the same hide path, goes to /load as
-    JSON, which Caddy applies only if all of it provisions. When the reply
-    to that is lost, the running config shows whether the load took.
-    """
-    _load_through_caddy_impl(
-        address,
-        before,
-        caddyfile=caddyfile,
-        before_adapted=before_adapted,
-        hide_path=hide_path,
-        known_aliases=known_aliases,
-        verify_candidate=verify_candidate,
-    )
-
-
-_ORIG_LOAD_THROUGH_CADDY = load_through_caddy
+def _caddy_lock_dir(env=None) -> Path:
+    source = os.environ if env is None else env
+    if CADDY_LOCK_DIR is not None:
+        raw = abs_user_path(CADDY_LOCK_DIR)
+    elif source.get('BGD_CADDY_LOCK_DIR'):
+        raw = abs_user_path(source['BGD_CADDY_LOCK_DIR'])
+    elif source.get('XDG_STATE_HOME'):
+        raw = abs_user_path(source['XDG_STATE_HOME']) / 'bgd-self-host' / 'caddy-locks'
+    else:
+        home = Path(source['HOME']) if source.get('HOME') else Path.home()
+        raw = abs_user_path(home / '.local' / 'state' / 'bgd-self-host' / 'caddy-locks')
+    if raw.is_symlink():
+        raise RuntimeError(f'Caddy lock directory cannot be a symlink: {raw}')
+    raw.mkdir(parents=True, exist_ok=True, mode=0o700)
+    info = raw.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid():
+        raise RuntimeError(f'unsafe Caddy lock directory ownership or type: {raw}')
+    if stat.S_IMODE(info.st_mode) != 0o700:
+        os.chmod(raw, 0o700)
+        info = raw.lstat()
+        if stat.S_IMODE(info.st_mode) != 0o700:
+            raise RuntimeError(f'unsafe Caddy lock directory permissions: {raw}')
+    return raw.resolve()
 
 
 @contextlib.contextmanager
 def _caddy_locks(caddy_config: CaddyConfig):
+    """Serialize cooperating self_host.py callers across layouts and aliases.
+
+    Uses a private per-user lock directory independent of the top Caddyfile's
+    parent so fragment mode works with a read-only top directory, plus the
+    legacy sibling `<Caddyfile>.lock` in inline mode. Multi-lock acquisition
+    always follows sorted canonical path order to avoid deadlock. Assumes
+    cooperating callers use these locks; uncoordinated external edits are
+    detected by source-stamp rechecks.
+    """
+    lock_dir = _caddy_lock_dir()
+    top_canonical = caddy_config.caddyfile.resolve()
+    top_digest = hashlib.sha256(str(top_canonical).encode()).hexdigest()[:24]
+    paths: set[Path] = {lock_dir / f'caddy-{top_digest}.lock'}
     if caddy_config.layout == 'inline':
         caddy_config.caddyfile.parent.mkdir(parents=True, exist_ok=True)
-        lock_paths = [caddy_config.caddyfile.with_name(caddy_config.caddyfile.name + '.lock')]
+        legacy_parent = Path(os.path.realpath(caddy_config.caddyfile.parent))
+        paths.add(legacy_parent / (caddy_config.caddyfile.name + '.lock'))
     else:
-        caddy_config.caddy_sites.parent.mkdir(parents=True, exist_ok=True)
-        top_digest = hashlib.sha256(str(caddy_config.caddyfile.resolve()).encode()).hexdigest()[:12]
-        lock_paths = sorted(
-            {
-                abs_user_path(caddy_config.caddy_sites.with_name(caddy_config.caddy_sites.name + '.lock')),
-                abs_user_path(caddy_config.caddy_sites.parent / f'.top-{top_digest}.lock'),
-            },
-            key=str,
-        )
+        sites_canonical = caddy_config.caddy_sites.resolve()
+        sites_digest = hashlib.sha256(str(sites_canonical).encode()).hexdigest()[:24]
+        paths.add(lock_dir / f'caddy-{sites_digest}.lock')
+    lock_paths = sorted(paths, key=str)
     with contextlib.ExitStack() as stack:
         for lock_path in lock_paths:
-            fh = stack.enter_context(lock_path.open('a'))
+            if lock_path.is_symlink():
+                raise RuntimeError(f'Caddy lock file cannot be a symlink: {lock_path}')
+            fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+            fh = stack.enter_context(os.fdopen(fd, 'r+'))
             fcntl.flock(fh, fcntl.LOCK_EX)
         yield
 
 
-def _restore_caddy_target(target: Path, before_bytes: bytes | None, expected_written: bytes) -> None:
+def _capture_file_state(path: Path, *, allow_symlink: bool) -> dict[str, object] | None:
+    if not allow_symlink and path.is_symlink():
+        raise RuntimeError(f'managed Caddy file cannot be a symlink: {path}')
+    try:
+        lst = path.lstat()
+    except FileNotFoundError:
+        return None
+    if not allow_symlink and stat.S_ISLNK(lst.st_mode):
+        raise RuntimeError(f'managed Caddy file cannot be a symlink: {path}')
+    st = path.stat()
+    if not stat.S_ISREG(st.st_mode):
+        raise RuntimeError(f'managed Caddy path is not a regular file: {path}')
+    data = path.read_bytes()
+    return {
+        'path': str(path),
+        'resolved': str(path.resolve()),
+        'is_symlink': stat.S_ISLNK(lst.st_mode),
+        'lstat_id': (lst.st_dev, lst.st_ino),
+        'stat_id': (st.st_dev, st.st_ino),
+        'mode': stat.S_IMODE(st.st_mode),
+        'sha256': hashlib.sha256(data).hexdigest(),
+        'bytes': data,
+    }
+
+
+def _file_identity_digest(state: dict[str, object] | None) -> tuple | None:
+    if state is None:
+        return None
+    return (
+        state['resolved'],
+        state['is_symlink'],
+        state['lstat_id'],
+        state['stat_id'],
+        state['mode'],
+        state['sha256'],
+    )
+
+
+def _capture_caddy_source_snapshot(cfg: CaddyConfig) -> dict[str, object]:
+    if cfg.layout == 'inline':
+        target_state = _capture_file_state(cfg.caddyfile, allow_symlink=False)
+        return {
+            'layout': 'inline',
+            'top': target_state,
+            'target': target_state,
+            'imported': (),
+            'imported_paths': (),
+            'siblings': {},
+        }
+    imported_files, _, _ = validate_fragment_setup(cfg)
+    top_state = _capture_file_state(cfg.caddyfile, allow_symlink=True)
+    target_state = _capture_file_state(cfg.caddy_sites, allow_symlink=False)
+    target_resolved = str(cfg.caddy_sites.resolve())
+    siblings = {}
+    for p in imported_files:
+        p_resolved = str(p.resolve())
+        if p_resolved != target_resolved:
+            siblings[p_resolved] = _file_identity_digest(_capture_file_state(p, allow_symlink=True))
+    return {
+        'layout': 'fragment',
+        'top': top_state,
+        'target': target_state,
+        'imported': tuple(str(p.resolve()) for p in imported_files),
+        'imported_paths': imported_files,
+        'siblings': siblings,
+    }
+
+
+def _verify_baseline_source(cfg: CaddyConfig, baseline: dict[str, object]) -> None:
+    current = _capture_caddy_source_snapshot(cfg)
+    if _file_identity_digest(current['top']) != _file_identity_digest(baseline['top']):
+        raise RuntimeError(f'top-level Caddyfile changed outside lock before write: {cfg.caddyfile}')
+    if _file_identity_digest(current['target']) != _file_identity_digest(baseline['target']):
+        raise RuntimeError(f'owned Caddy target changed outside lock before write: {cfg.target_file}')
+    if current['siblings'] != baseline['siblings'] or current['imported'] != baseline['imported']:
+        raise RuntimeError('imported Caddy files changed outside lock before write')
+
+
+def _write_owned_target(target: Path, data: bytes, *, expected_state: dict[str, object] | None) -> dict[str, object]:
+    if target.is_symlink():
+        raise RuntimeError(f'owned Caddy target cannot be a symlink: {target}')
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if expected_state is None:
+        if target.exists():
+            raise RuntimeError(f'owned Caddy target appeared outside lock: {target}')
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+        try:
+            with os.fdopen(fd, 'wb') as fh:
+                fh.write(data)
+        except BaseException:
+            target.unlink(missing_ok=True)
+            raise
+    else:
+        mode = int(expected_state['mode'])
+        fd, tmp_name = tempfile.mkstemp(prefix=f'.{target.name}.', suffix='.tmp', dir=target.parent)
+        tmp_path = Path(tmp_name)
+        try:
+            with os.fdopen(fd, 'wb') as fh:
+                fh.write(data)
+            os.chmod(tmp_path, mode)
+            current = _capture_file_state(target, allow_symlink=False)
+            if _file_identity_digest(current) != _file_identity_digest(expected_state):
+                raise RuntimeError(f'owned Caddy target changed outside lock before write: {target}')
+            os.replace(tmp_path, target)
+        except BaseException:
+            tmp_path.unlink(missing_ok=True)
+            raise
+    written_state = _capture_file_state(target, allow_symlink=False)
+    if written_state is None or written_state['bytes'] != data:
+        raise RuntimeError(f'failed to verify written Caddy target: {target}')
+    return written_state
+
+
+def _verify_post_write_source(cfg: CaddyConfig, baseline: dict[str, object], written_state: dict[str, object]) -> None:
+    target = cfg.target_file
+    current_target = _capture_file_state(target, allow_symlink=False)
+    if _file_identity_digest(current_target) != _file_identity_digest(written_state):
+        raise RuntimeError(f'owned Caddy target changed outside lock before load: {target}')
+    if cfg.layout == 'fragment':
+        imported_files, _, _ = validate_fragment_setup(cfg)
+        current_top = _capture_file_state(cfg.caddyfile, allow_symlink=True)
+        if _file_identity_digest(current_top) != _file_identity_digest(baseline['top']):
+            raise RuntimeError(f'top-level Caddyfile changed outside lock before load: {cfg.caddyfile}')
+        target_resolved = str(cfg.caddy_sites.resolve())
+        current_siblings = {}
+        for p in imported_files:
+            p_resolved = str(p.resolve())
+            if p_resolved != target_resolved:
+                current_siblings[p_resolved] = _file_identity_digest(_capture_file_state(p, allow_symlink=True))
+        if current_siblings != baseline['siblings']:
+            raise RuntimeError('imported Caddy sibling files changed outside lock before load')
+
+
+def _restore_caddy_target(
+    target: Path,
+    before_bytes: bytes | None,
+    expected_written: bytes,
+    *,
+    expected_state: dict[str, object] | None = None,
+) -> None:
+    if target.is_symlink():
+        raise RuntimeError(f'owned Caddy target became a symlink outside lock; refusing overwrite: {target}')
     if not target.exists():
         raise RuntimeError(f'owned Caddy target disappeared before rollback: {target}')
-    if target.read_bytes() != expected_written:
+    if expected_state is not None:
+        current = _capture_file_state(target, allow_symlink=False)
+        if _file_identity_digest(current) != _file_identity_digest(expected_state):
+            raise RuntimeError(f'owned Caddy target changed outside lock; refusing overwrite: {target}')
+    elif target.read_bytes() != expected_written:
         raise RuntimeError(f'owned Caddy target changed outside lock; refusing overwrite: {target}')
     if before_bytes is None:
         target.unlink()
     else:
-        target.write_bytes(before_bytes)
+        _write_owned_target(target, before_bytes, expected_state=expected_state)
 
 
 def _verify_runtime_restored(
@@ -1283,21 +1431,20 @@ def _verify_runtime_restored(
         if not _same_config_with_aliases(now, before_adapted, known_aliases):
             raise CaddyMismatch(f"running Caddy on {address} does not match pre-edit config after rollback")
     else:
-        _check_caddy_serves_for_config(address, before_top, caddy_config)
+        check_caddy_serves(address, before_top, caddyfile=caddy_config.caddyfile, known_aliases=known_aliases)
 
 
 def apply_caddy(site, mode, ports, *, caddy_config: CaddyConfig | None = None):
     cfg = resolve_caddy_config() if caddy_config is None else caddy_config
     with _caddy_locks(cfg):
-        imported_files: tuple[Path, ...] = ()
-        if cfg.layout == 'fragment':
-            imported_files, _, _ = validate_fragment_setup(cfg)
+        baseline = _capture_caddy_source_snapshot(cfg)
+        imported_files = baseline['imported_paths']
         aliases = known_caddy_aliases(cfg, imported_files)
         target = cfg.target_file
-        before_top = cfg.caddyfile.read_bytes() if cfg.caddyfile.exists() else None
-        before_target = target.read_bytes() if target.exists() else None
+        before_top = baseline['top']['bytes'] if baseline['top'] is not None else None
+        before_target = baseline['target']['bytes'] if baseline['target'] is not None else None
         address = (
-            _caddy_admin_address_for(cfg.caddyfile)
+            caddy_admin_address(cfg.caddyfile)
             if (cfg.layout == 'fragment' or before_top is not None)
             else CADDY_DEFAULT_ADMIN
         )
@@ -1305,12 +1452,20 @@ def apply_caddy(site, mode, ports, *, caddy_config: CaddyConfig | None = None):
             raise RuntimeError('a local TCP Caddy admin listener is required')
         running = True
         hide_path = None
-        before_adapted = None
+        snapshot_out: dict[str, object] = {}
         try:
             # Capture pre-mutation adapted JSON BEFORE modifying target or imports.
-            hide_path, before_adapted = _check_caddy_serves_for_config(address, before_top, cfg)
+            hide_path = check_caddy_serves(
+                address,
+                before_top,
+                caddyfile=cfg.caddyfile,
+                known_aliases=aliases,
+                _snapshot_out=snapshot_out,
+            )
         except CaddyUnreachable:
             running = False
+        before_adapted = snapshot_out.get('adapted')
+        _verify_baseline_source(cfg, baseline)
         text = replace_block(before_target.decode() if before_target is not None else '', render_caddy_block(site, mode, ports))
         written_bytes = text.encode()
         STATE.mkdir(exist_ok=True)
@@ -1328,32 +1483,32 @@ def apply_caddy(site, mode, ports, *, caddy_config: CaddyConfig | None = None):
             else:
                 (STATE / 'caddy-sites.before').unlink(missing_ok=True)
             (STATE / 'caddy-sites.candidate').write_bytes(written_bytes)
-        target.write_bytes(written_bytes)
+        written_state = _write_owned_target(target, written_bytes, expected_state=baseline['target'])
         try:
             if running:
                 verify_cb = (
                     (lambda edited: verify_fragment_in_adapted(edited, site, mode, ports, cfg.caddy_sites))
                     if cfg.layout == 'fragment' else None
                 )
-                if load_through_caddy is _ORIG_LOAD_THROUGH_CADDY:
-                    _load_through_caddy_impl(
-                        address,
-                        before_top,
-                        caddyfile=cfg.caddyfile,
-                        before_adapted=before_adapted,
-                        hide_path=hide_path,
-                        known_aliases=aliases,
-                        verify_candidate=verify_cb,
-                    )
-                else:
-                    load_through_caddy(address, before_top)
+                load_through_caddy(
+                    address,
+                    before_top,
+                    caddyfile=cfg.caddyfile,
+                    before_adapted=before_adapted,
+                    hide_path=hide_path,
+                    known_aliases=aliases,
+                    verify_candidate=verify_cb,
+                    verify_source=lambda: _verify_post_write_source(cfg, baseline, written_state),
+                )
             else:
+                _verify_post_write_source(cfg, baseline, written_state)
                 run(['caddy', 'validate', '--config', cfg.caddyfile, '--adapter', 'caddyfile'])
+                _verify_post_write_source(cfg, baseline, written_state)
                 tmuxnew(f'{NAME}-caddy', ['caddy', 'run', '--config', cfg.caddyfile, '--adapter', 'caddyfile'])
                 deadline = time.monotonic() + 10
                 while True:
                     try:
-                        _check_caddy_serves_for_config(address, cfg.caddyfile.read_bytes(), cfg)
+                        check_caddy_serves(address, cfg.caddyfile.read_bytes(), caddyfile=cfg.caddyfile, known_aliases=aliases)
                         break
                     except CaddyUnreachable:
                         if time.monotonic() >= deadline:
@@ -1363,7 +1518,7 @@ def apply_caddy(site, mode, ports, *, caddy_config: CaddyConfig | None = None):
             if isinstance(exc, CaddyLoadUnknown):
                 raise
             try:
-                _restore_caddy_target(target, before_target, written_bytes)
+                _restore_caddy_target(target, before_target, written_bytes, expected_state=written_state)
             except BaseException as restore_exc:
                 raise RuntimeError(
                     f'{exc}; target rollback failed ({restore_exc}); backups preserved in {STATE}'
@@ -1381,15 +1536,6 @@ def apply_caddy(site, mode, ports, *, caddy_config: CaddyConfig | None = None):
                     f'{exc}; restored {target} and verified previous config still running'
                 ) from exc
             raise
-
-
-_ORIG_APPLY_CADDY = apply_caddy
-
-
-def _apply_caddy_with_config(site, mode, ports, caddy_config: CaddyConfig):
-    if apply_caddy is _ORIG_APPLY_CADDY:
-        return apply_caddy(site, mode, ports, caddy_config=caddy_config)
-    return apply_caddy(site, mode, ports)
 
 
 if __name__ == '__main__':

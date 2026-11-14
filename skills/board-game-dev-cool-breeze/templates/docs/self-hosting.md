@@ -84,12 +84,17 @@ Configuration precedence is CLI flag (`--caddy-layout`, `--caddyfile`,
 Chosen layout and paths persist in `.self-host/config.json` across restarts.
 
 Fragment mode requires an existing top-level Caddyfile importing the fragment
-once at top level via an absolute or Caddy-env-derived path such as
-`import {$HOME}/.config/caddy/managed-sites/*.caddy`, which safely matches zero
-files initially and ignores `.lock`, `.before`, and `.candidate` files. Relative
-imports, duplicate imports, unsafe globs matching lock/backup files, markers in
+once at top level via an absolute path or a `{$VAR}` path whose variables
+resolve cleanly in the caller's environment, such as
+`import {$HOME}/.config/caddy/managed-sites/*.caddy` when caller and Caddy
+share `HOME`, which safely matches zero files initially and ignores `.lock`,
+`.before`, and `.candidate` files. Relative imports, unresolved `{$VAR}`
+placeholders or wrong-environment matches in top-level `import` lines,
+duplicate imports, unsafe globs matching lock/backup files, markers in
 top-level or sibling imported files, symlinked fragments, and fragments
-resolving to the top-level file are refused before any write.
+resolving to the top-level file are refused before any write; `{$VAR}`
+placeholders in service configuration (global options or site blocks) still
+expand solely inside Caddy.
 
 The rendered block
 has an explicit redirect from the opposite scheme to the chosen URL. For a
@@ -97,14 +102,28 @@ custom URL port, the opposite scheme uses its normal port. HTTPS needs working
 certificate provisioning, or a locally trusted intranet certificate. Plain
 HTTP requires neither and the clipboard helper works there too.
 
-Shared file locks serialize edits on both the top-level Caddyfile and the target
-fragment. A running Caddy adapts the pre-mutation top-level configuration using
-its own environment BEFORE mutating the fragment and proves running JSON
-matches that baseline. After editing the target, fragment mode verifies the
-game's routes in the adapted JSON before `/load`. On a rejected `/load` or an
-uncertain reply confirmed still on `old`, the script restores only its exact
-owned bytes and verifies running JSON matches the baseline again; an `unknown`
-outcome preserves candidate/before backups in `.self-host/` without blind
+Cooperating `self_host.py` callers acquire advisory `flock` locks in sorted
+canonical path order under a private per-user lock directory
+(`BGD_CADDY_LOCK_DIR`, `XDG_STATE_HOME`, or
+`~/.local/state/bgd-self-host/caddy-locks`, `0700`), unifying inline,
+fragment, symlink-alias, and multi-directory callers on the same canonical
+top-level Caddyfile lock while allowing a read-only top-level directory in
+fragment mode (inline mode also takes `<Caddyfile>.lock` for legacy callers).
+Uncoordinated external editors do not hold these locks, so before mutating the
+target the script captures baseline source stamps (inode, mode, content digest,
+and imported file membership) before running baseline `/adapt`, verifies them
+again before atomic non-symlink replacement of the target, and rechecks all
+source files (plus target identity) after candidate `/adapt` and immediately
+before `/load` (and across `caddy validate` when Caddy is stopped). A running
+Caddy adapts the pre-mutation top-level configuration using its own
+environment BEFORE mutating the fragment and proves running JSON matches that
+baseline. After editing the target, fragment mode verifies the game's routes
+in the adapted JSON before `/load`. On source or target drift during
+adaptation, `apply_caddy` aborts before `/load` and restores only an unchanged
+target, preserving external edits. On a rejected `/load` or an uncertain reply
+confirmed still on `old`, the script restores only its exact owned bytes and
+verifies running JSON matches the baseline again; an `unknown` outcome or
+external edit preserves candidate/before backups in `.self-host/` without blind
 overwrites. A missing or mismatched config never replaces another Caddy's sites.
 A new Caddy starts in `<project>-caddy` tmux; an existing shared Caddy stays in
 its owner's session. The template requires a local TCP admin listener. It leaves
