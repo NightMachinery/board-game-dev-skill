@@ -35,9 +35,9 @@ Each lesson is a rule and its reason. The label says how strong the evidence was
 
 - **10.07** Pass proxy and required runtime environment explicitly without hardcoding it into scripts. Test boot commands in a minimal environment because interactive shells and supervisors often load different paths and variables. *(seen repeatedly)*
 
-- **10.08** Treat reverse-proxy configuration as a shared resource: back it up, prove the running baseline matches, adapt the intended edit, then load only that change. A wrong configuration path can replace unrelated live sites. *(seen repeatedly)*
+- **10.08** Treat reverse-proxy configuration as a shared resource: keep any tracked or symlinked top-level config read-only via single top-level fragment imports (`--caddy-layout fragment` with a safe `*.caddy` glob and `--caddy-sites`), serialize writers with shared locks, capture the adapted baseline JSON before fragment edits, prove the running baseline matches, verify adapted candidate routes, then load. Distinguish confirmed-old from unknown `/load` outcomes and verify runtime restoration after any rollback so wrong paths or lost replies never overwrite unrelated live sites or corrupt recovery state. *(seen repeatedly)*
 
-- **10.09** Resolve configuration placeholders in the service's actual environment and account for file-path-sensitive adaptation. A configuration valid in the running service can fail or mean something different in an SSH command's environment. *(seen once)*
+- **10.09** Resolve configuration placeholders in the service's actual environment (such as Caddy `{$VAR}` expressions that only exist in the running proxy's environment) and account for file-path-sensitive adaptation, including differences between `/adapt` placeholder paths and symlink/fragment-resolved `file_server` hide paths. *(seen repeatedly)*
 
 - **10.10** Run a read-only candidate compatibility scan before stopping production, and repeat it after shutdown before swapping binaries. The second pass closes races with active moves and prevents silently archiving in-progress games. *(seen repeatedly)*
 
