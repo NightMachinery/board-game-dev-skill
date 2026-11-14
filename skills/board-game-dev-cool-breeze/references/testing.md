@@ -18,9 +18,10 @@ confirm, private choices and the hand-off between seats. It owns the readiness w
 harness bug is fixed once for every later run. Its control mapping has offline tests against the
 component gallery.
 
-It also owns evidence capture for games with hidden information: clear staged picks, hide private
-regions, and assert that the public board is still visible, so a blank masked page cannot pass a
-visual review.
+It also captures the complete current viewer UI, including hands, controls, tooltips, staged picks
+and confirmation labels. Game information is review evidence, not personal data: do not mask it or
+change selections or focus merely to take a screenshot. Exclude credentials and real people's
+personal information.
 
 `make e2e` plays one short seeded game per mode to a terminal outcome at one phone size, with a
 disposable server secret and journal, and CI runs it on every push. Desktop sizes, every module
@@ -54,9 +55,10 @@ Agents look at screenshots at two points, and each needs only the images that an
 
 Gallery images and real-game images prove different things. A gallery renders named synthetic
 states, so it covers rare and private controls cheaply and the same way every time. A real-game
-capture proves those controls appear in play. Neither replaces the other. A gallery image is also
-no guide to what to hide in a real capture: there, hide whole hands, docks, tooltips and private
-confirmation labels, then check that the public board is still visible.
+capture proves those controls appear in play. Neither replaces the other. Show the complete
+current viewer UI in both, so the review can assess dice, controls and staged choices as a player
+sees them. Preserve the game's per-viewer visibility rules; do not expose another seat's hidden
+state through the test hook to improve a screenshot.
 
 Record each image a verdict rests on by path and content hash in the run directory, so the verdict
 cannot attach to a later capture that overwrote the file. Name the states, sizes and locales left
@@ -144,4 +146,4 @@ Each lesson is a rule and its reason. The label says how strong the evidence was
 
 - **6.28** Accept a slice that changes the screen on real-game screenshots its agent has looked at, at the narrowest phone, a common phone and desktop, in each affected direction or locale. Bounds, overflow and error counts cannot show whether a player can read the state, and leaving every look to the milestone review finds a slice's regressions only after later slices build on them. *(seen repeatedly)*
 
-- **6.29** Keep gallery screenshots and real-game screenshots as separate evidence, and mask real captures by whole private regions. A gallery state lacks the live tooltips, staged picks and confirmation labels of a real game, so a mask that suits a gallery image can leave private information in a real capture. *(seen once)*
+- **6.29** Keep gallery and real-game screenshots as separate evidence, but capture the complete current viewer UI in both. Masking game information hides defects, and clearing staged choices destroys the state under review. Protect credentials and personal information rather than treating game state as personal data. *(owner decision)*
