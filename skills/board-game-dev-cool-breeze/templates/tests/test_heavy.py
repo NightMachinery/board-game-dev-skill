@@ -2136,7 +2136,7 @@ class NotifyFinishTests(NotifyCase):
         self.assertTrue(n.finish(0, None))
         (call,) = self.sends()
         self.assertEqual(call[:2], ["send", AGENT])
-        self.assertEqual(call[3:], ["--no-wait", "--json"])
+        self.assertEqual(call[3:], ["--no-wait", "--behavior", "steer", "--json"])
         text = call[2]
         for part in ("test job", "exit 0", "make test-go", "2m05s", "queued 30s", "ran 1m35s",
                      "job.log", "PASS engine", "ok all 42"):

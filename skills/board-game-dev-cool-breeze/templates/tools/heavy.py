@@ -101,7 +101,8 @@ itself in a new session with its output in RUN_DIR/logs/heavy-notify/, waits
 until that copy has published its queue ticket (or, for light, started the
 command), prints the ticket and the log path, and exits 0. The copy waits in
 the queue as usual, runs the command, and then sends the agent one message
-with `paseo send UUID TEXT --no-wait --json` (PASEO_BIN, default paseo, run
+with `paseo send UUID TEXT --no-wait --behavior B --json` (B comes from
+HEAVY_SEND_BEHAVIOR, then PASEO_SEND_BEHAVIOR, then steer; PASEO_BIN, default paseo, run
 from RUN_DIR so a worktree removed meanwhile cannot break it): the
 kind, the command, the outcome and exit code, the durations, the log path and
 the last lines of the log. A failed send is retried 3 times with backoff and
@@ -214,6 +215,7 @@ CHILD_ENV_ALLOW = frozenset((
     "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
     "http_proxy", "https_proxy", "no_proxy", "all_proxy",
     "HEAVY_PRIORITY", "BGD_PROJECT_CONFIG", "BGD_ART_ROOT", "PASEO_BIN", "PASEO_AGENT_ID",
+    "HEAVY_SEND_BEHAVIOR", "PASEO_SEND_BEHAVIOR",
 ))
 # The tools' own settings under env_prefix. A project may keep private settings
 # under the same prefix, so the prefix as a whole is not inherited.
@@ -1986,6 +1988,11 @@ class Notifier:
     def note(self, msg: str) -> None:
         self.guard._warn(f"heavy-notify: {msg}")
 
+    def send_behavior(self) -> str:
+        """How `paseo send` treats a busy agent: steer joins its turn, interrupt aborts it."""
+        env = self.guard.env
+        return env.get("HEAVY_SEND_BEHAVIOR") or env.get("PASEO_SEND_BEHAVIOR") or "steer"
+
     def paseo(self, *args: str) -> Tuple[bool, str, str]:
         argv = [self.guard.env.get("PASEO_BIN") or "paseo", *args]
         # Not the job's directory: the outcome may wait for a busy agent,
@@ -2067,7 +2074,7 @@ class Notifier:
         with self.lock:
             if self.finished:
                 return False
-            ok, _, detail = self.paseo("send", self.agent, text, "--no-wait", "--json")
+            ok, _, detail = self.paseo("send", self.agent, text, "--no-wait", "--behavior", self.send_behavior(), "--json")
         if ok:
             self.last_contact = now
             self.note(f"keep-warm ping sent after {fmt_secs(since)}")
@@ -2149,7 +2156,7 @@ class Notifier:
         for attempt in range(len(NOTIFY_BACKOFF) + 1):
             if attempt:
                 self.guard.clock.sleep(NOTIFY_BACKOFF[attempt - 1])
-            ok, _, detail = self.paseo("send", target, text, "--no-wait", "--json")
+            ok, _, detail = self.paseo("send", target, text, "--no-wait", "--behavior", self.send_behavior(), "--json")
             if ok:
                 self.note(f"sent the outcome to {target}")
                 return True
